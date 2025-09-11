@@ -1,9 +1,8 @@
-import torch, os
-
-try:
-    import psutil
-except ImportError:
-    psutil = None
+import torch
+import os
+from typing import Dict, Any
+import psutil
+from time import time
 
 class CUDAMemTracker:
     def __init__(self, device=None):
@@ -35,3 +34,28 @@ class CUDAMemTracker:
         }
 
 
+
+def profile_torch_module_forward(module: torch.nn.Module, inputs: Dict[str, Any])
+    t0 = time()
+    with CUDAMemTracker() as t:
+        module(**inputs)
+    t1 = time() - t0
+    
+    report = t.report()
+    print(f'Elapsed time:       {t1:3.3}s')
+    print(f'Peak allocated mem: {report['peak_alloc_MB']:3.3}MB')
+    print(f'Peak reserved mem:  {report['peak_alloc_MB']:3.3}MB')
+    
+    
+def profile_torch_module_backward(module: torch.nn.Module, inputs: Dict[str, Any])
+    t0 = time()
+    with CUDAMemTracker() as t:
+        out = module(**inputs)
+        loss = out.sum()
+        loss.backward()
+    t1 = time() - t0
+    
+    report = t.report()
+    print(f'Elapsed time:       {t1:3.3}s')
+    print(f'Peak allocated mem: {report['peak_alloc_MB']:3.3}MB')
+    print(f'Peak reserved mem:  {report['peak_alloc_MB']:3.3}MB')
