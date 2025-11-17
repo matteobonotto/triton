@@ -20,25 +20,28 @@ def _compute_tanh_phi(x):
 
 @triton.jit
 def _compute_tanh_phi(x):
-    angle = tl.sqrt(2 / math.pi) * (x + .044715 * x * x * x)
+    angle = tl.sqrt(2 / math.pi) * (x + 0.044715 * x * x * x)
     exp = tl.exp(2 * angle)
     tanh = (exp - 1) / (exp + 1)
     phi = 0.5 * (1 + tanh)
     return tanh, phi
 
+
+@triton.jit()
+def _gelu_op_fwd(x):
+    _, phi = _compute_tanh_phi(x)
+    return x * phi
+
+
 @triton.jit
-def _gelu_fwd_triton(
-    x_ptr, act_ptr, num_elements, block_size: tl.constexpr
-):
+def _gelu_fwd_triton(x_ptr, act_ptr, num_elements, block_size: tl.constexpr):
 
     pid = tl.program_id(axis=0)
     ptr_offset = pid * block_size + tl.arange(0, block_size)
     mask = ptr_offset < num_elements
     x = tl.load(x_ptr + ptr_offset, mask)
 
-    _, phi = _compute_tanh_phi(x)
-    chunk_act = x * phi
-
+    chunk_act = _gelu_op_fwd(x)
     tl.store(act_ptr + ptr_offset, chunk_act, mask)
 
 
@@ -50,7 +53,18 @@ def _gelu_fwd(x: Tensor, block_size: int = 2048) -> Tensor:
     act = torch.empty_like(x).to(x.device)
 
     _gelu_fwd_triton[grid](x, act, num_elements, block_size)
-    return act #, tanh, phi
+    return act  # , tanh, phi
+
+
+@triton.jit()
+def _gelu_op_bwd(x, grad_output):
+    tanh, phi = _compute_tanh_phi(x)
+
+    factor = 1 / tl.sqrt(2 * math.pi)
+    phi_prime = factor * (1 - tanh * tanh) * (1 + 3 * 0.044715 * x * x)
+
+    derivative = x * phi_prime + phi
+    return derivative * grad_output
 
 
 @triton.jit
@@ -65,14 +79,7 @@ def _gelu_bwd_triton(
     x = tl.load(x_ptr + ptr_offset, mask)
     grad_output = tl.load(grad_output_ptr + ptr_offset, mask)
 
-    tanh, phi = _compute_tanh_phi(x)
-
-    factor = 1 / tl.sqrt(2 * math.pi)
-    phi_prime = factor * (1 - tanh * tanh) * (1 + 3 * 0.044715 * x * x)
-
-    derivative = x * phi_prime + phi
-    grad_input = derivative * grad_output
-
+    grad_input = _gelu_op_bwd(x, grad_output)
     tl.store(grad_input_ptr + ptr_offset, grad_input, mask)
 
 
@@ -82,19 +89,16 @@ def _gelu_bwd(x: Tensor, grad_output: Tensor, block_size: int = 512) -> Tensor:
 
     assert x.numel() == grad_output.numel(), "Expected x.numel() = grad_output.numel()"
     assert x.is_contiguous(), f"x not contiguous, {x.stride()=}"
-    assert grad_output.is_contiguous(), f"grad_output not contiguous, {grad_output.stride()=}"
+    assert (
+        grad_output.is_contiguous()
+    ), f"grad_output not contiguous, {grad_output.stride()=}"
 
     num_elements = x.numel()
     grid = (ceil(num_elements / block_size),)
 
     grad_input = torch.empty_like(x).to(x.device)
 
-    _gelu_bwd_triton[grid](
-        x, grad_output, grad_input,
-        num_elements,
-        block_size
-    )
-
+    _gelu_bwd_triton[grid](x, grad_output, grad_input, num_elements, block_size)
 
 
 class GeluFunction(Function):
