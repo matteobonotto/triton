@@ -15,6 +15,11 @@ def _compute_sigma(x):
     return 1 / (1 + tl.exp(-x))
 
 
+@triton.jit()
+def _silu_op_fwd(x):
+    return x * _compute_sigma(x)
+
+
 @triton.jit
 def _silu_fwd_triton(x_poiter, act_pointer, num_elements, block_size: tl.constexpr):
 
@@ -26,7 +31,7 @@ def _silu_fwd_triton(x_poiter, act_pointer, num_elements, block_size: tl.constex
     # sigma = 1 / (1 + tl.exp(-x))
     # chunk_res = x * sigma
     # chunk_res = x / (1 + tl.exp(-x))
-    chunk_res = x * _compute_sigma(x)
+    chunk_res = _silu_op_fwd(x)
 
     tl.store(act_pointer + pointers, chunk_res, mask)
     # tl.store(sigma_pointer+pointers, sigma, mask)
@@ -40,6 +45,13 @@ def _silu_fwd(x: Tensor, block_size: int = 1024) -> Tensor:
     act = torch.empty_like(x).to(x.device)
     _silu_fwd_triton[grid](x, act, num_elements, block_size)
     return act  # , sigma
+
+
+@triton.jit()
+def _silu_op_bwd(x, grad_output):
+    sigma = _compute_sigma(x)
+    act_prime = sigma * (1 + x * (1 - sigma))
+    return grad_output * act_prime
 
 
 @triton.jit()
@@ -58,13 +70,8 @@ def _silu_triton_bwd(
     x = tl.load(x_ptr + ptr_offset, mask)
     grad_output = tl.load(grad_output_ptr + ptr_offset, mask)
 
-    sigma = _compute_sigma(x)
-    act_prime = sigma * (1 + x * (1 - sigma))
-    grad_input = grad_output * act_prime
-
+    grad_input = _silu_op_bwd(x, grad_output)
     tl.store(grad_input_ptr + ptr_offset, grad_input, mask)
-
-    ...
 
 
 def _silu_bwd(x: Tensor, grad_output: Tensor, block_size: int = 2048) -> Tensor:

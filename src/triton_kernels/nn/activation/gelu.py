@@ -21,7 +21,7 @@ def _compute_tanh_phi(x):
 @triton.jit
 def _compute_tanh_phi(x):
     # angle = tl.sqrt(2 / math.pi)  * (x + 0.044715 * x * x * x)
-    angle = 0.7978845608028654  * (x + 0.044715 * x * x * x)
+    angle = 0.7978845608028654 * (x + 0.044715 * x * x * x)
     exp = tl.exp(2 * angle)
     tanh = (exp - 1) / (exp + 1)
     phi = 0.5 * (1 + tanh)

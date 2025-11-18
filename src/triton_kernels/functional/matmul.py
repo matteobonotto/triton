@@ -26,17 +26,17 @@ DEVICE = get_device()
 #     Naive Blocked Matrix Multiplication Kernel.
 #     Removes the 'super-grouping' (L2 Cache Optimization) logic.
 #     """
-    
+
 #     # -----------------------------------------------------------
 #     # 1. Program ID and Grid Mapping (The Logic Change)
 #     # -----------------------------------------------------------
-    
+
 #     # Get the unique program ID (1D)
 #     pid = tl.program_id(axis=0)
-    
+
 #     # Calculate number of blocks along the N dimension
 #     num_pid_n = tl.cdiv(N, BLOCK_SIZE_N)
-    
+
 #     # Naive Row-Major Mapping:
 #     # We strictly fill one row of blocks (N dimension) before moving to the next row (M dimension).
 #     # This removes the L2 cache locality optimization (swizzling).
@@ -46,30 +46,30 @@ DEVICE = get_device()
 #     # -----------------------------------------------------------
 #     # 2. Pointer Arithmetic (Same as original)
 #     # -----------------------------------------------------------
-    
+
 #     # Create pointers for the first blocks of A and B.
 #     offs_am = (pid_m * BLOCK_SIZE_M + tl.arange(0, BLOCK_SIZE_M)) % M
 #     offs_bn = (pid_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)) % N
 #     offs_k = tl.arange(0, BLOCK_SIZE_K)
-    
+
 #     a_ptrs = a_ptr + (offs_am[:, None] * stride_am + offs_k[None, :] * stride_ak)
 #     b_ptrs = b_ptr + (offs_k[:, None] * stride_bk + offs_bn[None, :] * stride_bn)
 
 #     # -----------------------------------------------------------
 #     # 3. Computation Loop (Same as original)
 #     # -----------------------------------------------------------
-    
+
 #     accumulator = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_N), dtype=tl.float32)
-    
+
 #     for k in range(0, tl.cdiv(K, BLOCK_SIZE_K)):
-#         # Load blocks of A and B. 
+#         # Load blocks of A and B.
 #         # We apply masking on the K dimension to handle cases where K is not a multiple of BLOCK_SIZE_K
 #         a = tl.load(a_ptrs, mask=offs_k[None, :] < K - k * BLOCK_SIZE_K, other=0.0)
 #         b = tl.load(b_ptrs, mask=offs_k[:, None] < K - k * BLOCK_SIZE_K, other=0.0)
-        
+
 #         # Accumulate
 #         accumulator = tl.dot(a, b, accumulator)
-        
+
 #         # Advance pointers
 #         a_ptrs += BLOCK_SIZE_K * stride_ak
 #         b_ptrs += BLOCK_SIZE_K * stride_bk
@@ -79,16 +79,14 @@ DEVICE = get_device()
 #     # -----------------------------------------------------------
 #     # 4. Store Result (Same as original)
 #     # -----------------------------------------------------------
-    
+
 #     offs_cm = pid_m * BLOCK_SIZE_M + tl.arange(0, BLOCK_SIZE_M)
 #     offs_cn = pid_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)
 #     c_ptrs = c_ptr + stride_cm * offs_cm[:, None] + stride_cn * offs_cn[None, :]
 #     c_mask = (offs_cm[:, None] < M) & (offs_cn[None, :] < N)
 #     tl.store(c_ptrs, c, mask=c_mask)
-    
-    
-    
-    
+
+
 @triton.jit()
 def _eager_matmul_triton(
     a_ptr,
@@ -124,11 +122,11 @@ def _eager_matmul_triton(
     offset_ptr_k = tl.arange(0, BLOCK_SIZE_K)
 
     # get pointers for first tiles tile_a, tile_b
-    tile_a_ptr = (
-        a_ptr + (offset_ptr_m[:, None] * stride_am + offset_ptr_k[None, :] * stride_ak)
+    tile_a_ptr = a_ptr + (
+        offset_ptr_m[:, None] * stride_am + offset_ptr_k[None, :] * stride_ak
     )
-    tile_b_ptr = (
-        b_ptr + (offset_ptr_k[:, None] * stride_bk + offset_ptr_n[None, :] * stride_bn)
+    tile_b_ptr = b_ptr + (
+        offset_ptr_k[:, None] * stride_bk + offset_ptr_n[None, :] * stride_bn
     )
 
     tile_c = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_N), dtype=tl.float32)
@@ -145,10 +143,10 @@ def _eager_matmul_triton(
 
         # Create masks that check BOTH dimensions
         # For A: Check M (rows) AND K (cols)
-        mask_ak = (offset_ptr_k[None, :] < items_after_K)
+        mask_ak = offset_ptr_k[None, :] < items_after_K
 
         # # For B: Check K (rows) AND N (cols)
-        mask_bk = (offset_ptr_k[:, None] < items_after_K)
+        mask_bk = offset_ptr_k[:, None] < items_after_K
         # mask_bk = (offset_ptr_n[None, :] < N)
 
         tile_a = tl.load(tile_a_ptr, mask_ak, other=0.0)
