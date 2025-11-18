@@ -25,8 +25,9 @@ def _activation_bwd(x, grad_output, activation_name: tl.constexpr):
 @triton.jit()
 def _linear_act_fwd_triton(
     x_ptr,
-    W_ptr,
+    w_ptr,
     b_ptr,
+    o_ptr,
     M,
     N,
     K,
@@ -34,23 +35,67 @@ def _linear_act_fwd_triton(
     stride_xk,
     stride_wk,
     stride_wn,
+    stride_bn,
     stride_om,
     stride_on,
     activation_name,
-    BLOCK_SIZE_M : tl.constexpr,
-    BLOCK_SIZE_N : tl.constexpr,
-    BLOCK_SIZE_K : tl.constexpr,
-    GROUP_SIZE_M : tl.constexpr,
+    BLOCK_SIZE_M: tl.constexpr,
+    BLOCK_SIZE_N: tl.constexpr,
+    BLOCK_SIZE_K: tl.constexpr,
+    GROUP_SIZE_M: tl.constexpr,
 ):
 
     pid = tl.program_id(axis=0)
     num_programs_n = tl.cdiv(N, BLOCK_SIZE_N)
 
-    # map pid to (pid_m, pid_n)
+    ### map pid to (pid_m, pid_n)
     pid_m = pid // num_programs_n
     pid_n = pid % num_programs_n
-    
-    
+
+    ### get offsets along M, N, K directions
+    offset_m = pid_m * BLOCK_SIZE_M + tl.arange(0, BLOCK_SIZE_M)
+    offset_n = pid_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)
+    offset_k = tl.arange(0, BLOCK_SIZE_K)
+
+    mask_m = offset_m[:, None] < M
+    mask_n = offset_n[None, :] < N
+
+    ### get starting pointers for x, w, b
+    tile_x_ptr = x_ptr + offset_m[:, None] * stride_xm + offset_k[None, :] * stride_xk
+    tile_w_ptr = w_ptr + offset_k[:, None] * stride_wk + offset_n[None, :] * stride_wn
+    # tile_b_ptr = b_ptr + offset_n[None, :] * stride_bn
+
+    ### frist compute z = x @ W.T + b
+    z = tl.zeros((M, N), dtype=tl.float32)
+    for k in tl.range(0, tl.cdiv(K, BLOCK_SIZE_K)):
+
+        # mask values depending on k
+        # k_remaning = K - k * BLOCK_SIZE_K
+        k_already_done = k * BLOCK_SIZE_K
+        mask_x = (
+            mask_m & (offset_k >= k_already_done)[None, :] & (offset_k < K)[None, :]
+        )
+        mask_w = (
+            (offset_k >= k_already_done)[:, None] & (offset_k < K)[:, None] & mask_n
+        )
+
+        tile_x = tl.load(tile_x_ptr, mask_x, other=0.0)
+        tile_w = tl.load(tile_w_ptr, mask_w, other=0.0)
+        # tile_b = tl.load(..., other=0.)
+
+        z = tl.dot(tile_x, tile_w, z)  # + tile_b
+
+        # slide the pointers along k directions to the next block
+        tile_x_ptr += BLOCK_SIZE_K * stride_xk[None, :]
+        tile_w_ptr += BLOCK_SIZE_K * stride_wk[:, None]
+
+    ### then compute activation + downcast to bfloat16
+    # o = _activation_fwd(z, activation_name)
+    o = o.to(tl.bfloat16)
+
+    tile_o_ptr = o_ptr + offset_m[:, None] * stride_om + offset_n[None, :] * stride_on
+    mask_o = mask_m & mask_n
+    tl.store(tile_o_ptr, o, mask_o)
 
 
 def _linear_act_fwd(x, W, b, activation_name: str = "silu"):
@@ -58,6 +103,9 @@ def _linear_act_fwd(x, W, b, activation_name: str = "silu"):
     Triton implementation of the following kernel
         z = x @ W.T + b
         out =  f(z)
+
+    IMPORTANT NOTE: the .T operation is done inside tge triton kernel by swapping the
+    stride values of W, therefore pass W and not W.T.
 
     """
 
@@ -77,6 +125,7 @@ def _linear_act_fwd(x, W, b, activation_name: str = "silu"):
         x,
         W,
         b,
+        out,
         M,
         N,
         K,

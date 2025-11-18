@@ -74,7 +74,7 @@ def _eager_matmul_triton(
 
         tile_c = tl.dot(tile_a, tile_b, acc=tile_c)
 
-        # now slide the tile_a, tile_b pointers along Z direction of k steps
+        # now slide the tile_a, tile_b pointers along Z direction of BLOCK_SIZE_K steps
         tile_a_ptr += BLOCK_SIZE_K * stride_ak
         tile_b_ptr += BLOCK_SIZE_K * stride_bk
 
