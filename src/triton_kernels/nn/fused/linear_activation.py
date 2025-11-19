@@ -3,6 +3,8 @@ from ...utils import validate_contiguous
 from ..activation.gelu import _gelu_op_fwd, _gelu_op_bwd
 from ..activation.silu import _silu_op_fwd, _silu_op_bwd
 
+from ...autotune import block_matmul_autotune_base_config
+
 from math import ceil
 import triton
 import triton.language as tl
@@ -10,24 +12,35 @@ import torch
 from torch import nn, Tensor
 from torch.autograd import Function
 
-MAP_ACTIVATIONS_FWD = {"gelu": _gelu_op_fwd, "silu": _silu_op_fwd}
-MAP_ACTIVATIONS_BWD = {"gelu": _gelu_op_bwd, "silu": _silu_op_bwd}
+
+@triton.jit()
+def _activation_fwd(x, activation: tl.constexpr):
+    if activation == "silu":
+        return _silu_op_fwd(x)
+    elif activation == "gelu":
+        return _gelu_op_fwd(x)
+    elif activation == 'no_activation':
+        return x
+    else:
+        raise NotImplementedError
+    # return MAP_ACTIVATIONS_FWD[activation_name](x)
 
 
 @triton.jit()
-def _activation_fwd(x, activation_name: tl.constexpr):
-    if activation_name == "no_activation":
-        return x
-    return MAP_ACTIVATIONS_FWD[activation_name](x)
+def _activation_bwd(x, grad_output, activation: tl.constexpr):
+    if activation == "silu":
+        return _silu_op_bwd(x, grad_output)
+    elif activation == "gelu":
+        return _gelu_op_bwd(x, grad_output)
+    elif activation == 'no_activation':
+        return x * grad_output
+    else:
+        raise NotImplementedError
 
-
-@triton.jit()
-def _activation_bwd(x, grad_output, activation_name: tl.constexpr):
-    if activation_name == "no_activation":
-        return x
-    return MAP_ACTIVATIONS_BWD[activation_name](x, grad_output)
-
-
+@triton.autotune(
+    configs=block_matmul_autotune_base_config(),
+    key=['M', 'N', 'K'],
+)
 @triton.jit()
 def _linear_act_fwd_triton(
     x_ptr,
@@ -44,7 +57,7 @@ def _linear_act_fwd_triton(
     stride_bn,
     stride_om,
     stride_on,
-    activation_name,
+    activation: tl.constexpr,
     BLOCK_SIZE_M: tl.constexpr,
     BLOCK_SIZE_N: tl.constexpr,
     BLOCK_SIZE_K: tl.constexpr,
@@ -73,7 +86,7 @@ def _linear_act_fwd_triton(
 
     tile_b = tl.load(tile_b_ptr, mask_n, other=0.0)
 
-    ### frist compute z = x @ W.T + b
+    ### frist compute z = x @ W.T
     z = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_N), dtype=tl.float32)
     for k in tl.range(0, tl.cdiv(K, BLOCK_SIZE_K)):
 
@@ -92,10 +105,10 @@ def _linear_act_fwd_triton(
         tile_x_ptr += BLOCK_SIZE_K * stride_xk
         tile_w_ptr += BLOCK_SIZE_K * stride_wk
 
-    ### then compute activation + downcast to bfloat16
+    ### then compute +b and activation + downcast to bfloat16
     z += tile_b
     # o = z
-    o = _activation_fwd(z, activation_name)
+    o = _activation_fwd(z, activation)
     # o = o.to(tl.bfloat16)
 
     tile_o_ptr = o_ptr + offset_m[:, None] * stride_om + offset_n[None, :] * stride_on
@@ -109,7 +122,7 @@ def _linear_act_fwd(
     b: Tensor,
     transpose_x: bool = False,
     transpose_W: bool = False,
-    activation_name: str = "gelu",
+    activation: str = "gelu",
 ):
     """
     Triton implementation of the following kernel
@@ -134,7 +147,7 @@ def _linear_act_fwd(
         assert K == W.shape[1], "dimension mismatch"
         stride_W = (W.stride(1), W.stride(0))
     else:
-        N = W.shape[0]
+        N = W.shape[1]
         stride_W = (W.stride(0), W.stride(1))
         assert K == W.shape[0], "dimension mismatch"
 
@@ -146,13 +159,13 @@ def _linear_act_fwd(
 
     # using naive block matmul for now, implement more efficient algo later
 
-    BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K = (64, 64, 64)  # hard-coded for now
-    GROUP_SIZE_M = 8
+    # BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K = (64, 64, 64)  # hard-coded for now
+    # GROUP_SIZE_M = 8
+    # grid = ((ceil(M / BLOCK_SIZE_M) * ceil(N / BLOCK_SIZE_N)),)
 
-    grid = ((ceil(M / BLOCK_SIZE_M) * ceil(N / BLOCK_SIZE_N)),)
+    out = torch.zeros((M, N), device=x.device, dtype=x.dtype)
 
-    out = torch.zeros((M, N)).to(x.device)
-
+    grid = lambda META: (triton.cdiv(M, META['BLOCK_SIZE_M']) * triton.cdiv(N, META['BLOCK_SIZE_N']), )
     _linear_act_fwd_triton[grid](
         x,
         W,
@@ -168,15 +181,16 @@ def _linear_act_fwd(
         b.stride(0),
         out.stride(0),
         out.stride(1),
-        activation_name,
-        BLOCK_SIZE_M,
-        BLOCK_SIZE_N,
-        BLOCK_SIZE_K,
-        GROUP_SIZE_M,
+        activation,
+        # BLOCK_SIZE_M,
+        # BLOCK_SIZE_N,
+        # BLOCK_SIZE_K,
+        # GROUP_SIZE_M,
     )
     ...
 
-    return out
+    return out.to(x.dtype)
+
 
 
 @triton.jit()
