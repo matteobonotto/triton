@@ -19,7 +19,7 @@ def _activation_fwd(x, activation: tl.constexpr):
         return _silu_op_fwd(x)
     elif activation == "gelu":
         return _gelu_op_fwd(x)
-    elif activation == 'no_activation':
+    elif activation == "no_activation":
         return x
     else:
         raise NotImplementedError
@@ -32,14 +32,15 @@ def _activation_bwd(x, grad_output, activation: tl.constexpr):
         return _silu_op_bwd(x, grad_output)
     elif activation == "gelu":
         return _gelu_op_bwd(x, grad_output)
-    elif activation == 'no_activation':
+    elif activation == "no_activation":
         return x * grad_output
     else:
         raise NotImplementedError
 
+
 @triton.autotune(
     configs=block_matmul_autotune_base_config(),
-    key=['M', 'N', 'K'],
+    key=["M", "N", "K"],
 )
 @triton.jit()
 def _linear_act_fwd_triton(
@@ -141,7 +142,7 @@ def _linear_act_fwd(
         raise NotImplementedError
     else:
         K, M = x.shape
-        
+
     if transpose_W:
         N = W.shape[0]
         assert K == W.shape[1], "dimension mismatch"
@@ -165,7 +166,9 @@ def _linear_act_fwd(
 
     out = torch.zeros((M, N), device=x.device, dtype=x.dtype)
 
-    grid = lambda META: (triton.cdiv(M, META['BLOCK_SIZE_M']) * triton.cdiv(N, META['BLOCK_SIZE_N']), )
+    grid = lambda META: (
+        triton.cdiv(M, META["BLOCK_SIZE_M"]) * triton.cdiv(N, META["BLOCK_SIZE_N"]),
+    )
     _linear_act_fwd_triton[grid](
         x,
         W,
@@ -190,7 +193,6 @@ def _linear_act_fwd(
     ...
 
     return out.to(x.dtype)
-
 
 
 @triton.jit()

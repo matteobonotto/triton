@@ -16,23 +16,28 @@ test_tensors = [
 ]
 
 
-
 M = 100
 N = 200
-x = torch.randn(M, N, device=DEVICE, dtype=torch.float32) # Changed dtype to float32 for debugging
+x = torch.randn(
+    M, N, device=DEVICE, dtype=torch.float32
+)  # Changed dtype to float32 for debugging
 _fwd = Linear(N, N, bias=False).to(DEVICE)
 _fwd_ref = nn.Linear(N, N, bias=False).to(DEVICE)
 
+
 def fwd(x, provider):
-    ### for benchmark olny! 
+    ### for benchmark olny!
     if provider == "torch":
         return _fwd_ref(x)
-    elif provider == 'triton':
+    elif provider == "triton":
         return _fwd(x)
     else:
         raise ValueError
 
+
 from torch import autograd
+
+
 def bwd(x, provider):
     x.requires_grad = True
     out = fwd(x, provider)
@@ -45,6 +50,7 @@ def bwd(x, provider):
         inputs = (x, _fwd_provider.weight)
     grads_ref = autograd.grad(loss, inputs)
 
+
 # def bwd(x, provider):
 #     x.requires_grad = True
 #     out = fwd(x, provider)
@@ -53,12 +59,12 @@ def bwd(x, provider):
 
 
 MAP_FWD_BKW = {
-    "fwd" : fwd,
-    "bwd" : bwd,
+    "fwd": fwd,
+    "bwd": bwd,
 }
 
-for mode in ['fwd', 'bwd']:
-    for provider in ['triton', 'torch']:
+for mode in ["fwd", "bwd"]:
+    for provider in ["triton", "torch"]:
         out = MAP_FWD_BKW[mode](x, provider)
 
 
@@ -88,14 +94,28 @@ def test_linear(x: Tensor):
         # print(linear.weight.grad[0,0])
 
         grad_outputs = torch.rand_like(x).to(DEVICE)
-        inputs = (x, linear_ref.weight, linear_ref.bias) if has_bias else (x, linear_ref.weight,)
+        inputs = (
+            (x, linear_ref.weight, linear_ref.bias)
+            if has_bias
+            else (
+                x,
+                linear_ref.weight,
+            )
+        )
         grads_ref = autograd.grad(
             out_ref,
             inputs,
             grad_outputs=grad_outputs,
             retain_graph=True,
         )
-        inputs = (x, linear.weight, linear.bias) if has_bias else (x, linear.weight,)
+        inputs = (
+            (x, linear.weight, linear.bias)
+            if has_bias
+            else (
+                x,
+                linear.weight,
+            )
+        )
         grads = autograd.grad(
             out,
             inputs,

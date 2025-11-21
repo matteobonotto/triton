@@ -1,5 +1,1 @@
-
-
-
-def matmul():
-    ...
+def matmul(): ...

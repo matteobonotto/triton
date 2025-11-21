@@ -16,9 +16,6 @@ DEVICE = get_device()
 test_tensors = [torch.rand(100), torch.rand(100, 100)]
 
 
-
-
-
 @pytest.mark.parametrize("x", test_tensors)
 def test_gelu(x: Tensor):
     x = x.to(DEVICE)
