@@ -36,11 +36,31 @@ def _matmul_kernel(
     offset_n = (pid // (GROUP_SIZE_M * GROUP_SIZE_M * num_groups_m)) * GROUP_SIZE_M
     pid_m = (pid % GROUP_SIZE_M) + offset_m % M
     pid_n = ((pid // GROUP_SIZE_M) - offset_m) + offset_n
+    
+    
 
     print(f"{int(pid)=}, {int(pid_m)=}, {int(pid_n)=}")
     ...
+    """
+    int(pid)=0, int(pid_m)=0, int(pid_n)=0
+    int(pid)=1, int(pid_m)=1, int(pid_n)=0
+    int(pid)=2, int(pid_m)=0, int(pid_n)=1
+    int(pid)=3, int(pid_m)=1, int(pid_n)=1
+    int(pid)=4, int(pid_m)=2, int(pid_n)=0
+    int(pid)=5, int(pid_m)=3, int(pid_n)=0
+    int(pid)=6, int(pid_m)=2, int(pid_n)=1
+    int(pid)=7, int(pid_m)=3, int(pid_n)=1
+    int(pid)=8, int(pid_m)=0, int(pid_n)=2
+    int(pid)=9, int(pid_m)=1, int(pid_n)=2
+    int(pid)=10, int(pid_m)=0, int(pid_n)=3
+    int(pid)=11, int(pid_m)=1, int(pid_n)=3
+    int(pid)=12, int(pid_m)=2, int(pid_n)=2
+    int(pid)=13, int(pid_m)=3, int(pid_n)=2
+    int(pid)=14, int(pid_m)=2, int(pid_n)=3
+    int(pid)=15, int(pid_m)=3, int(pid_n)=3
+    """
 
-    pid = tl.program_id(axis=0)
+    # pid = tl.program_id(axis=0)
     num_pid_m = tl.cdiv(M, BLOCK_SIZE_M)
     num_pid_n = tl.cdiv(N, BLOCK_SIZE_N)
     num_pid_in_group = GROUP_SIZE_M * num_pid_n
@@ -50,9 +70,48 @@ def _matmul_kernel(
     pid_m = first_pid_m + ((pid % num_pid_in_group) % group_size_m)
     pid_n = (pid % num_pid_in_group) // group_size_m
 
-    print(f"{int(pid)=}, {int(pid_m)=}, {int(pid_n)=}")
-    print(" ")
+    # print(f"{int(pid)=}, {int(pid_m)=}, {int(pid_n)=}")
+    # print(" ")
     ...
+    
+    """
+    int(pid)=0, int(pid_m)=0, int(pid_n)=0
+    int(pid)=1, int(pid_m)=1, int(pid_n)=0
+    int(pid)=2, int(pid_m)=0, int(pid_n)=1
+    int(pid)=3, int(pid_m)=1, int(pid_n)=1
+    int(pid)=4, int(pid_m)=0, int(pid_n)=2
+    int(pid)=5, int(pid_m)=1, int(pid_n)=2
+    int(pid)=6, int(pid_m)=0, int(pid_n)=3
+    int(pid)=7, int(pid_m)=1, int(pid_n)=3
+    int(pid)=8, int(pid_m)=2, int(pid_n)=0
+    int(pid)=9, int(pid_m)=3, int(pid_n)=0
+    int(pid)=10, int(pid_m)=2, int(pid_n)=1
+    int(pid)=11, int(pid_m)=3, int(pid_n)=1
+    int(pid)=12, int(pid_m)=2, int(pid_n)=2
+    int(pid)=13, int(pid_m)=3, int(pid_n)=2
+    int(pid)=14, int(pid_m)=2, int(pid_n)=3
+    int(pid)=15, int(pid_m)=3, int(pid_n)=3
+    """
+    """
+    int(pid)=0, int(pid_m)=0, int(pid_n)=0
+    int(pid)=1, int(pid_m)=1, int(pid_n)=0
+    int(pid)=2, int(pid_m)=2, int(pid_n)=0
+    int(pid)=3, int(pid_m)=0, int(pid_n)=1
+    int(pid)=4, int(pid_m)=1, int(pid_n)=1
+    int(pid)=5, int(pid_m)=2, int(pid_n)=1
+    int(pid)=6, int(pid_m)=0, int(pid_n)=2
+    int(pid)=7, int(pid_m)=1, int(pid_n)=2
+    int(pid)=8, int(pid_m)=2, int(pid_n)=2
+    int(pid)=9, int(pid_m)=0, int(pid_n)=3
+    int(pid)=10, int(pid_m)=1, int(pid_n)=3
+    int(pid)=11, int(pid_m)=2, int(pid_n)=3
+    int(pid)=12, int(pid_m)=0, int(pid_n)=4
+    int(pid)=13, int(pid_m)=1, int(pid_n)=4
+    int(pid)=14, int(pid_m)=2, int(pid_n)=4
+    int(pid)=15, int(pid_m)=0, int(pid_n)=5
+    int(pid)=16, int(pid_m)=1, int(pid_n)=5
+    int(pid)=17, int(pid_m)=2, int(pid_n)=5
+    """
     ### some assumption to help the compiler
     # tl.assume(pid_m >= 0)
     # tl.assume(pid_n >= 0)
@@ -73,6 +132,7 @@ def matmul(a, b):
 
     c = torch.zeros((M, N), device=a.device, dtype=a.dtype)
 
+    BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M = (1, 1, 1, 3)
     BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M = (1, 1, 1, 2)
     # grid = lambda META: (ceil(M, META['BLOCK_SIZE_M']) * ceil(N, META['BLOCK_SIZE_N']), )
     grid = (ceil(M / BLOCK_SIZE_M) * ceil(N / BLOCK_SIZE_N),)
