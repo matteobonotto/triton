@@ -37,11 +37,48 @@ def _matmul_kernel(
     pid_m = (pid % GROUP_SIZE_M) + offset_m % M
     pid_n = ((pid // GROUP_SIZE_M) - offset_m) + offset_n
     
+    num_groups_m = tl.cdiv(M, group_size_m)
+    num_groups_n = tl.cdiv(N, group_size_m)
     
+    
+    
+    ###
+    
+    # num_groups_m = tl.cdiv(M, group_size_m)
+    num_groups = min(...)
+    
+    # DIV = tl.min(GROUP_SIZE_M * GROUP_SIZE_M, N)
+    # offset_m = (N // (GROUP_SIZE_M * GROUP_SIZE_M)) * GROUP_SIZE_M
+    offset = pid // (num_groups * GROUP_SIZE_M * GROUP_SIZE_M)
+    pid_m = (pid % GROUP_SIZE_M) + offset * GROUP_SIZE_M
+    # pid_m = tl.min(pid_m)
+    # offset_n = - N * offset_m
+    # group_size = min()
+    # div = pid // num_programs_in_group
+    pid_n = (pid // GROUP_SIZE_M) - N * offset
+
 
     print(f"{int(pid)=}, {int(pid_m)=}, {int(pid_n)=}")
     ...
     """
+    
+    int(pid)=0, int(pid_m)=0, int(pid_n)=0
+    int(pid)=1, int(pid_m)=1, int(pid_n)=0
+    int(pid)=2, int(pid_m)=0, int(pid_n)=1
+    int(pid)=3, int(pid_m)=1, int(pid_n)=1
+    int(pid)=4, int(pid_m)=0, int(pid_n)=2
+    int(pid)=5, int(pid_m)=1, int(pid_n)=2
+    int(pid)=6, int(pid_m)=0, int(pid_n)=3
+    int(pid)=7, int(pid_m)=1, int(pid_n)=3
+    int(pid)=8, int(pid_m)=2, int(pid_n)=0
+    int(pid)=9, int(pid_m)=3, int(pid_n)=0
+    int(pid)=10, int(pid_m)=2, int(pid_n)=1
+    int(pid)=11, int(pid_m)=3, int(pid_n)=1
+    int(pid)=12, int(pid_m)=2, int(pid_n)=2
+    int(pid)=13, int(pid_m)=3, int(pid_n)=2
+    int(pid)=14, int(pid_m)=2, int(pid_n)=3
+    int(pid)=15, int(pid_m)=3, int(pid_n)=3
+
     int(pid)=0, int(pid_m)=0, int(pid_n)=0
     int(pid)=1, int(pid_m)=1, int(pid_n)=0
     int(pid)=2, int(pid_m)=0, int(pid_n)=1
@@ -111,6 +148,19 @@ def _matmul_kernel(
     int(pid)=15, int(pid_m)=0, int(pid_n)=5
     int(pid)=16, int(pid_m)=1, int(pid_n)=5
     int(pid)=17, int(pid_m)=2, int(pid_n)=5
+    
+    int(pid)=0, int(pid_m)=0, int(pid_n)=0
+    int(pid)=1, int(pid_m)=1, int(pid_n)=0
+    int(pid)=2, int(pid_m)=0, int(pid_n)=1
+    int(pid)=3, int(pid_m)=1, int(pid_n)=1
+    int(pid)=4, int(pid_m)=0, int(pid_n)=2
+    int(pid)=5, int(pid_m)=1, int(pid_n)=2
+    int(pid)=6, int(pid_m)=2, int(pid_n)=0
+    int(pid)=7, int(pid_m)=3, int(pid_n)=0
+    int(pid)=8, int(pid_m)=2, int(pid_n)=1
+    int(pid)=9, int(pid_m)=3, int(pid_n)=1
+    int(pid)=10, int(pid_m)=2, int(pid_n)=2
+    int(pid)=11, int(pid_m)=3, int(pid_n)=2
     """
     ### some assumption to help the compiler
     # tl.assume(pid_m >= 0)

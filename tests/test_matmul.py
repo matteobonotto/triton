@@ -8,8 +8,8 @@ from triton_kernels.functional.matmul import swizzle_matmul as matmul
 
 def test_matmul():
     M, N, K = (128, 128, 128)
-    M, N, K = (9, 9, 9)
-    M, N, K = (4, 4, 4)
+    M, N, K = (9, 8, 9)
+    M, N, K = (4, 3, 4)
     # M, N, K = (64, 64, 64)
     # M, N, K = (4, 4, 4)
 
