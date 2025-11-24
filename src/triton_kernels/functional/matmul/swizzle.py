@@ -37,25 +37,49 @@ def _matmul_kernel(
     pid_m = (pid % GROUP_SIZE_M) + offset_m % M
     pid_n = ((pid // GROUP_SIZE_M) - offset_m) + offset_n
     
-    num_groups_m = tl.cdiv(M, group_size_m)
-    num_groups_n = tl.cdiv(N, group_size_m)
+    # num_groups_m = tl.cdiv(M, group_size_m)
+    # num_groups_n = tl.cdiv(N, group_size_m)
     
     
     
     ###
     
     # num_groups_m = tl.cdiv(M, group_size_m)
-    num_groups = min(...)
     
     # DIV = tl.min(GROUP_SIZE_M * GROUP_SIZE_M, N)
     # offset_m = (N // (GROUP_SIZE_M * GROUP_SIZE_M)) * GROUP_SIZE_M
-    offset = pid // (num_groups * GROUP_SIZE_M * GROUP_SIZE_M)
+    offset = pid // (num_groups_n * GROUP_SIZE_M * GROUP_SIZE_M)    
+    num_groups = min((GROUP_SIZE_M, M - offset * GROUP_SIZE_M, N - N * offset))
+    
     pid_m = (pid % GROUP_SIZE_M) + offset * GROUP_SIZE_M
     # pid_m = tl.min(pid_m)
     # offset_n = - N * offset_m
     # group_size = min()
     # div = pid // num_programs_in_group
     pid_n = (pid // GROUP_SIZE_M) - N * offset
+    
+    # (pid // N) * GROUP_SIZE_M
+    group_size_m = GROUP_SIZE_M
+    group_size_m = min(GROUP_SIZE_M, M - (pid // N) * GROUP_SIZE_M)
+    # num_programs_in_group = GROUP_SIZE_M * tl.cdiv(N, BLOCK_SIZE_N)
+    pid_n = (pid // GROUP_SIZE_M) % N
+    pid_m = (pid % group_size_m) + (pid // N) * GROUP_SIZE_M
+ 
+ 
+ 
+    ###
+    num_groups_n = tl.cdiv(N, BLOCK_SIZE_N)
+    num_programs_in_group = num_groups_n * GROUP_SIZE_M
+    start_pid_m = pid // num_programs_in_group
+    start_pid_n = ...
+
+    # print(f"{int(pid)=}, {int(start_pid_m)=}, {int(start_pid_n)=}")
+    
+    group_size_m = GROUP_SIZE_M
+    pid_n = pid // GROUP_SIZE_M
+    pid_m = pid % group_size_m
+
+
 
 
     print(f"{int(pid)=}, {int(pid_m)=}, {int(pid_n)=}")
