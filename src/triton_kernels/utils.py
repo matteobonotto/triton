@@ -27,5 +27,8 @@ def is_cuda_available() -> bool:
 
 
 def get_device() -> torch.device:
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cuda" if is_cuda() else "cpu"
     return torch.device(device)
+
+def is_cuda():
+    return torch.cuda.is_available()

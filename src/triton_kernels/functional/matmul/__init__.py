@@ -1,9 +1,8 @@
-from .eager import matmul as eager_matmul
+# from .eager import matmul as eager_matmul
 from .persistent import matmul as persistent_matmul
-from .swizzle import matmul as swizzle_matmul
+from .block import matmul as block_matmul
 
 __all__ = [
-    "eager_matmul",
     "persistent_matmul",
-    "swizzle_matmul",
+    "block_matmul",
 ]

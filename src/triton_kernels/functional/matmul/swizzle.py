@@ -46,24 +46,24 @@ def _matmul_kernel(
     
     # num_groups_m = tl.cdiv(M, group_size_m)
     
-    # DIV = tl.min(GROUP_SIZE_M * GROUP_SIZE_M, N)
-    # offset_m = (N // (GROUP_SIZE_M * GROUP_SIZE_M)) * GROUP_SIZE_M
-    offset = pid // (num_groups_n * GROUP_SIZE_M * GROUP_SIZE_M)    
-    num_groups = min((GROUP_SIZE_M, M - offset * GROUP_SIZE_M, N - N * offset))
+    # # DIV = tl.min(GROUP_SIZE_M * GROUP_SIZE_M, N)
+    # # offset_m = (N // (GROUP_SIZE_M * GROUP_SIZE_M)) * GROUP_SIZE_M
+    # offset = pid // (num_groups_n * GROUP_SIZE_M * GROUP_SIZE_M)    
+    # num_groups = min((GROUP_SIZE_M, M - offset * GROUP_SIZE_M, N - N * offset))
     
-    pid_m = (pid % GROUP_SIZE_M) + offset * GROUP_SIZE_M
-    # pid_m = tl.min(pid_m)
-    # offset_n = - N * offset_m
-    # group_size = min()
-    # div = pid // num_programs_in_group
-    pid_n = (pid // GROUP_SIZE_M) - N * offset
+    # pid_m = (pid % GROUP_SIZE_M) + offset * GROUP_SIZE_M
+    # # pid_m = tl.min(pid_m)
+    # # offset_n = - N * offset_m
+    # # group_size = min()
+    # # div = pid // num_programs_in_group
+    # pid_n = (pid // GROUP_SIZE_M) - N * offset
     
-    # (pid // N) * GROUP_SIZE_M
-    group_size_m = GROUP_SIZE_M
-    group_size_m = min(GROUP_SIZE_M, M - (pid // N) * GROUP_SIZE_M)
-    # num_programs_in_group = GROUP_SIZE_M * tl.cdiv(N, BLOCK_SIZE_N)
-    pid_n = (pid // GROUP_SIZE_M) % N
-    pid_m = (pid % group_size_m) + (pid // N) * GROUP_SIZE_M
+    # # (pid // N) * GROUP_SIZE_M
+    # group_size_m = GROUP_SIZE_M
+    # group_size_m = min(GROUP_SIZE_M, M - (pid // N) * GROUP_SIZE_M)
+    # # num_programs_in_group = GROUP_SIZE_M * tl.cdiv(N, BLOCK_SIZE_N)
+    # pid_n = (pid // GROUP_SIZE_M) % N
+    # pid_m = (pid % group_size_m) + (pid // N) * GROUP_SIZE_M
  
  
  
@@ -75,10 +75,13 @@ def _matmul_kernel(
 
     # print(f"{int(pid)=}, {int(start_pid_m)=}, {int(start_pid_n)=}")
     
-    group_size_m = GROUP_SIZE_M
-    pid_n = pid // GROUP_SIZE_M
-    pid_m = pid % group_size_m
+    num_programs_in_group = tl.cdiv(N, BLOCK_SIZE_N) * GROUP_SIZE_M
+    offset_m = (pid // num_programs_in_group) * GROUP_SIZE_M
+    group_size_m = min(GROUP_SIZE_M , M - offset_m)
+    pid_m = (pid % num_programs_in_group) % group_size_m + offset_m
+    pid_n = (pid % num_programs_in_group) // group_size_m
 
+    [int((x % num_programs_in_group) % group_size_m) for x in range(20)]
 
 
 
