@@ -2,7 +2,10 @@
 from .persistent import matmul as persistent_matmul
 from .block import matmul as block_matmul
 
+from .interface import matmul
+
 __all__ = [
     "persistent_matmul",
     "block_matmul",
+    "matmul",
 ]

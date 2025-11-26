@@ -6,10 +6,12 @@ from math import ceil
 
 from ...utils import get_device
 from .autotune import get_cuda_autotune_config
+from .utils import validate_inputs_matmul
 
 DEVICE = get_device()
 
 
+@triton.git()
 def map_pid_m_n_L2_optim(pid, M, N, BLOCK_SIZE_M, BLOCK_SIZE_N, GROUP_SIZE_M):
 
     num_blocks_n = tl.cdiv(N, BLOCK_SIZE_N)
@@ -155,9 +157,8 @@ def matmul(
     b: Tensor,
     optimize_L2: bool = True,
 ):
-    assert a.ndim == 2, "expected A to have ndim=2"
-    assert b.ndim == 2, "expected B to have ndim=2"
-    assert a.shape[1] == b.shape[0], "dimension mismatch"
+
+    validate_inputs_matmul(a, b)
 
     M, K = a.shape
     N = b.shape[1]

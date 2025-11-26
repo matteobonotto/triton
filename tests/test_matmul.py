@@ -36,7 +36,6 @@ def test_map_pid_L2_optimization():
             )
 
 
-
 # test_map_pid_L2_optimization()
 
 
@@ -62,9 +61,11 @@ def test_matmul_1():
 # test_matmul_1()
 
 dtypes = [torch.float32, torch.bfloat16, torch.float16]
-pytest.mark.parametrize('dtype', dtypes, 'optimize_L2', [True, False])
+pytest.mark.parametrize("dtype", dtypes, "optimize_L2", [True, False])
+
+
 def test_matmul(dtype: torch.dtype, optimize_L2: bool):
-    print(f'Running test_matmul, {dtype=}, {optimize_L2=}')
+    print(f"Running test_matmul, {dtype=}, {optimize_L2=}")
     # M, N, K = (128, 234, 128)
     # M, N, K = (64, 75, 64)
     # M, N, K = (9, 8, 9)
@@ -75,7 +76,7 @@ def test_matmul(dtype: torch.dtype, optimize_L2: bool):
     DEVICE = get_device()
     if DEVICE == torch.device("cpu") and dtype == torch.bfloat16:
         print(f"Skipping test, bfloat16 not available on cpu")
-    else:   
+    else:
         for _ in range(10):
             M, N, K = tuple(random.randint(1, 2048) for _ in range(3))
             # print(f"{M=}, {N=}, {K=}, ")
