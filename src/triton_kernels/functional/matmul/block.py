@@ -167,7 +167,7 @@ def matmul(
 
     # grid = lambda META: (ceil(M / META['BLOCK_SIZE_M']) * ceil(N / META['BLOCK_SIZE_N']),)
 
-    BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M = 64, 64, 64, 32
+    BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M = 64, 64, 64, 4
     # BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M = 2, 2, 2, 4
     # BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M = 1, 1, 1, 2
     grid = (ceil(M / BLOCK_SIZE_M) * ceil(N / BLOCK_SIZE_N),)
