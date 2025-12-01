@@ -6,25 +6,9 @@ from math import ceil
 
 from ...utils import get_device
 from .autotune import get_cuda_autotune_config
-from .utils import validate_inputs_matmul, map_pid_m_n_L2_optim
+from .utils import validate_inputs_matmul, map_pid_m_n
 
 DEVICE = get_device()
-
-
-
-
-
-@triton.jit()
-def map_pid_m_n(pid, M, N, BLOCK_SIZE_M, BLOCK_SIZE_N, GROUP_SIZE_M, optimize_L2):
-    if optimize_L2:
-        pid_m, pid_n = map_pid_m_n_L2_optim(
-            pid, M, N, BLOCK_SIZE_M, BLOCK_SIZE_N, GROUP_SIZE_M
-        )
-    else:
-        n_programs_n = tl.cdiv(N, BLOCK_SIZE_N)
-        pid_m = pid // n_programs_n
-        pid_n = pid % n_programs_n
-    return (pid_m, pid_n)
 
 
 # `triton.jit`'ed functions can be auto-tuned by using the `triton.autotune` decorator, which consumes:
@@ -139,7 +123,7 @@ def matmul(
 
     BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M = 64, 64, 64, 4
     # BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M = 2, 2, 2, 4
-    # BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M = 1, 1, 1, 2
+    # BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M = 2, 2, 2, 1
     grid = (ceil(M / BLOCK_SIZE_M) * ceil(N / BLOCK_SIZE_N),)
 
     _block_matmul_triton[grid](
