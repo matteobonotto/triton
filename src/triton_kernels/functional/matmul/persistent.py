@@ -127,7 +127,6 @@ def _matmul_persistent_triton(
         tl.store(ptr_tile_c, tile_c, mask=mask_c)
 
 
-
 def matmul(
     a: Tensor, b: Tensor, optimize_L2: bool = True, DEBUG: bool = False
 ) -> Tensor:
