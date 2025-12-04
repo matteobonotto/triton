@@ -1,4 +1,5 @@
 from torch import nn, Tensor
+from typing import Optional
 import torch
 import triton
 import triton.language as tl
@@ -137,6 +138,10 @@ def matmul(
     M, K = a.shape
     _, N = b.shape
     
+    def allocation_fun(size:int, alignment:int, stream:Optional[int]):
+        return torch.empty(size, dtype=torch.int8, device=a.device)
+    triton.set_allocator(allocation_fun)
+
     c = torch.zeros(M, N, device=DEVICE, dtype=a.dtype)
 
     # grid = lambda META: (ceil(M / META['BLOCK_SIZE_M']) * ceil(N / META['BLOCK_SIZE_N']),)
