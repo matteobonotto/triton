@@ -1,5 +1,5 @@
 from triton_kernels.utils import get_device, is_cuda
-from triton_kernels.functional.matmul.persistent import matmul as p_matmul
+from triton_kernels.functional.matmul.descriptor_block import matmul as db_matmul
 from triton_kernels.functional.matmul.block import matmul as b_matmul
 import torch
 import math
@@ -21,12 +21,13 @@ def test_simple_matmul():
     torch.manual_seed(0)
 
     M, N, K = (4, 4, 5)
-    M, N, K = (64, 75, 64)
+    M, N, K = (64, 75, 66)
+    # M, N, K = (64, 64, 64)
 
     a = torch.rand((M, K), device=DEVICE, dtype=torch.float32)
     b = torch.rand((K, N), device=DEVICE, dtype=torch.float32)
 
-    triton_output_p = p_matmul(a, b, optimize_L2=False, DEBUG=True)
+    triton_output_p = db_matmul(a, b)
     triton_output_b = b_matmul(a, b, optimize_L2=False)
     torch_output = torch.matmul(a, b)
 
@@ -68,7 +69,7 @@ def test_matmul_block(dtype: torch.dtype, optimize_L2: bool):
             b = torch.rand(K, N).to(dtype)
 
             out_ref = a @ b
-            out = p_matmul(a, b, optimize_L2=optimize_L2)
+            out = db_matmul(a, b, optimize_L2=optimize_L2)
 
             assert (out_ref - out).norm() / out_ref.norm() < 1e-6
             print((out_ref - out).norm() / out_ref.norm())
