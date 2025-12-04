@@ -119,7 +119,7 @@ def matmul(a: Tensor, b: Tensor, DEBUG: bool = False) -> Tensor:
 
     # tma descriptors need a global allocation function
     def allocation_fun(size: int, allignment: int, stream: Optional[int]):
-        return torch.empty(size, device=a.device, dtyp=torch.float32)
+        return torch.empty(size, device=a.device, dtype=torch.float32)
     triton.set_allocator(allocation_fun)
 
     # dummy_block = [1, 1]
