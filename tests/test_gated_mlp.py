@@ -82,4 +82,4 @@ def test_fwd_op_triton():
     # triton.testing.assert_close(gmlp_1(x), gmlp_2(x), rtol=1e-6)
 
 
-# test_fwd_op_triton()
+test_fwd_op_triton()

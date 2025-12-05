@@ -17,7 +17,7 @@ def _fwd_kernel(
     WT_gp_ptr,
     b_gp_ptr,
     out_ptr,
-    act_fn,
+    act_fn: tl.constexpr,
     dropout_p,
     M,
     N,
@@ -114,7 +114,7 @@ def validate_dimensions(
     WT_gp: Tensor,  # this one is transposed
     b_gp: Tensor | None,
 ) -> None:
-    assert x.ndims <= 2, f"input tensor must have ndims <=2, got {x.ndims}"
+    assert x.ndim <= 2, f"input tensor must have ndims <=2, got {x.ndim}"
     assert WT_up.shape[1] == x.shape[1], "dimension mismatch in WT_up or x"
     assert WT_gp.shape == WT_up.shape, "dimension mismatch in WT_up or WT_gp"
 

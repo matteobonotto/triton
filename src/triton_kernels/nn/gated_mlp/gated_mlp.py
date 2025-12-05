@@ -80,19 +80,19 @@ from torch.autograd.function import Function
 
 def eager_forward(
     x: Tensor,
-    W_up: Tensor,
+    WT_up: Tensor,
     b_up: Optional[Tensor],
-    W_gp: Tensor,
+    WT_gp: Tensor,
     b_gp: Optional[Tensor],
     act_fn: str,
     dropout_p: float,
 ) -> Tensor:
 
-    up = x @ W_up.T
+    up = x @ WT_up.T
     if b_up is not None:
         up += b_up
 
-    gated = x @ W_gp.T
+    gated = x @ WT_gp.T
     if b_gp is not None:
         gated += b_gp
 
