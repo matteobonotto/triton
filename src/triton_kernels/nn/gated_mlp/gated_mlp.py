@@ -2,7 +2,7 @@ from typing import Dict, Optional
 from torch import nn
 from collections import OrderedDict
 
-from .ops.fwd import mlp_hidden_states_fwd
+from .ops.fwd_persistent_tma import mlp_hidden_states_fwd
 
 
 class ClassInstantier(OrderedDict):

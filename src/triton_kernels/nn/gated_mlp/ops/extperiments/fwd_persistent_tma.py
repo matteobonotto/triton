@@ -13,11 +13,11 @@ from .utils import map_pid_m_n
 def _fwd_kernel(
     x_ptr,
     WT_up_ptr,
-    b_up_ptr,
-    has_bias_up,
+    # b_up_ptr,
+    # has_bias_up,
     WT_gp_ptr,
-    b_gp_ptr,
-    has_bias_gp,
+    # b_gp_ptr,
+    # has_bias_gp,
     out_ptr,
     act_fn: tl.constexpr,
     dropout_p,
@@ -61,19 +61,19 @@ def _fwd_kernel(
         out_ptr, shape=[M, N], strides=[N, 1], block_shape=[BLOCK_SIZE_M, BLOCK_SIZE_N]
     )
 
-    if has_bias_up:
-        b_up_desc = tl.make_tensor_descriptor(
-            b_up_ptr, shape=[N, 1], strides=[1, 0], block_shape=[BLOCK_SIZE_N]
-        )
+    # if has_bias_up:
+    #     b_up_desc = tl.make_tensor_descriptor(
+    #         b_up_ptr, shape=[N, 1], strides=[1, 0], block_shape=[BLOCK_SIZE_N]
+    #     )
 
-    if has_bias_gp:
-        b_gp_desc = tl.make_tensor_descriptor(
-            b_gp_ptr, shape=[N, 1], strides=[1, 0], block_shape=[BLOCK_SIZE_N]
-        )
+    # if has_bias_gp:
+    #     b_gp_desc = tl.make_tensor_descriptor(
+    #         b_gp_ptr, shape=[N, 1], strides=[1, 0], block_shape=[BLOCK_SIZE_N]
+    #     )
 
     ### persistent matmul: loop over multiple (m,n) tiles
     for tile_id in tl.range(
-        pid, total_programs, NUM_SMS, flatten=True, warp_specialize=True
+        pid, total_programs, NUM_SMS, flatten=True, warp_specialize=False
     ):
         pid_m, pid_n = map_pid_m_n(
             tile_id, M, N, BLOCK_SIZE_M, BLOCK_SIZE_N, GROUP_SIZE_M, True
@@ -93,13 +93,13 @@ def _fwd_kernel(
             tile_WT_up = WT_up_desc.load([offset_n, offset_k])
 
             tile_up = tl.dot(tile_x, tile_WT_up.T, acc=tile_up)
-            if has_bias_up:
-                tile_up += ...
+            # if has_bias_up:
+            #     tile_up += ...
 
             tile_WT_gp = WT_gp_desc.load([offset_n, offset_k])
             tile_gp = tl.dot(tile_x, tile_WT_gp.T, acc=tile_gp)
-            if has_bias_gp:
-                tile_gp += ...
+            # if has_bias_gp:
+            #     tile_gp += ...
 
         ### compute act(tile_gp) * tile_up (skip dropout for now)
         tile_out = _act_fwd(tile_gp, act_fn) * tile_up
@@ -199,11 +199,11 @@ def mlp_hidden_states_fwd(
     _fwd_kernel[grid](
         x,
         WT_up,
-        b_up,
-        has_b_up,
+        # b_up,
+        # has_b_up,
         WT_gp,
-        b_gp,
-        has_b_gp,
+        # b_gp,
+        # has_b_gp,
         out,
         act_fn,
         dropout_p,
