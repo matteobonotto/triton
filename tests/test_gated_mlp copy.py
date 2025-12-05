@@ -2,8 +2,8 @@ from triton_kernels.nn.gated_mlp.gated_mlp import (
     NaiveGatedMLP,
     FusedGatedMLP,
     eager_forward,
-    mlp_hidden_states_fwd,
 )
+from triton_kernels.nn.gated_mlp.ops.fwd_persistent_tma import mlp_hidden_states_fwd
 from triton_kernels.utils import get_device
 
 import triton
@@ -43,9 +43,7 @@ def test_fwd_op_triton():
     DEVICE = get_device()
     DTYPE = torch.float32
 
-    init_args = {
-        "hidden_act": "no_act", "dropout_p": 0.0, "bias": False,
-    }
+    init_args = {"hidden_act": "no_act", "dropout_p": 0.0, "bias": False}
 
     gmlp = NaiveGatedMLP(**init_args).to(DEVICE).to(DTYPE)
 

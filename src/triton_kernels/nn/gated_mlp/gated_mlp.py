@@ -100,6 +100,7 @@ def eager_forward(
     out = gated * up
     # x = nn.functional.dropout(x, dropout_p, training)
     return out
+    
 
 
 class FusedGatedMLPFunction(Function):
