@@ -44,10 +44,7 @@ def _block_matmul_triton(
 
     ### create tensor descriptors for a, b, c
     a_desc = tl.make_tensor_descriptor(
-        a_ptr, 
-        shape=[M, K], 
-        strides=[K, 1], 
-        block_shape=[BLOCK_SIZE_M, BLOCK_SIZE_K]
+        a_ptr, shape=[M, K], strides=[K, 1], block_shape=[BLOCK_SIZE_M, BLOCK_SIZE_K]
     )
 
     b_desc = tl.make_tensor_descriptor(
@@ -109,7 +106,7 @@ def pad_tensor_16_byte_aligned(t: Tensor, axis: int) -> Tensor:
     padded_dim = dim + 16 - dim % 16
     new_dims = (padded_dim, t.shape[1]) if axis == 0 else (t.shape[0], padded_dim)
     new_t = torch.zeros(new_dims, dtype=t.dtype, device=t.device)
-    new_t[:old_dims[0], :old_dims[1]] = t
+    new_t[: old_dims[0], : old_dims[1]] = t
     return new_t
 
 
@@ -124,8 +121,8 @@ def matmul(
     M, K = a.shape
     _, N = b.shape
     old_N = N
-    
-    ### pad if needed (tensor_descriptor expecting stride(0) to 
+
+    ### pad if needed (tensor_descriptor expecting stride(0) to
     # be multiple of 16 -> K, N must be so)
     if K % 16 != 0:
         a = pad_tensor_16_byte_aligned(a, axis=1)
@@ -134,12 +131,13 @@ def matmul(
     if N % 16 != 0:
         b = pad_tensor_16_byte_aligned(b, axis=1)
         old_N = N
-        
+
     M, K = a.shape
     _, N = b.shape
-    
-    def allocation_fun(size:int, alignment:int, stream:Optional[int]):
+
+    def allocation_fun(size: int, alignment: int, stream: Optional[int]):
         return torch.empty(size, dtype=torch.int8, device=a.device)
+
     triton.set_allocator(allocation_fun)
 
     c = torch.zeros(M, N, device=DEVICE, dtype=a.dtype)
@@ -164,6 +162,6 @@ def matmul(
         BLOCK_SIZE_K,
         GROUP_SIZE_M,
     )
-    
+
     c = c[:, :old_N]
     return c if c.dtype == a.dtype else c.to(dtype=a.dtype)
