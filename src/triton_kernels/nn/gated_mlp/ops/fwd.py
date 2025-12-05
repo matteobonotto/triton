@@ -14,8 +14,10 @@ def _fwd_kernel(
     x_ptr,
     WT_up_ptr,
     b_up_ptr,
+    has_bias_up,
     WT_gp_ptr,
     b_gp_ptr,
+    has_bias_gp,
     out_ptr,
     act_fn: tl.constexpr,
     dropout_p,
@@ -36,8 +38,6 @@ def _fwd_kernel(
     total_programs = num_programs_m * num_programs_n
 
     ### define tensor descriptors
-    has_bias_up = True if b_up_ptr is not None else False
-    has_bias_gp = True if b_gp_ptr is not None else False
 
     x_desc = tl.make_tensor_descriptor(
         x_ptr, shape=[M, K], strides=[K, 1], block_shape=[BLOCK_SIZE_M, BLOCK_SIZE_K]
@@ -63,12 +63,12 @@ def _fwd_kernel(
 
     if has_bias_up:
         b_up_desc = tl.make_tensor_descriptor(
-            b_up_desc, shape=[N, 1], strides=[1, 0], block_shape=[BLOCK_SIZE_N]
+            b_up_ptr, shape=[N, 1], strides=[1, 0], block_shape=[BLOCK_SIZE_N]
         )
 
     if has_bias_gp:
         b_gp_desc = tl.make_tensor_descriptor(
-            b_gp_desc, shape=[N, 1], strides=[1, 0], block_shape=[BLOCK_SIZE_N]
+            b_gp_ptr, shape=[N, 1], strides=[1, 0], block_shape=[BLOCK_SIZE_N]
         )
 
     ### persistent matmul: loop over multiple (m,n) tiles
@@ -194,12 +194,16 @@ def mlp_hidden_states_fwd(
     ### allocate output and run the kernel
     out = torch.zeros((M, N), dtype=x.dtype, device=x.device)
 
+    has_b_gp = b_gp is not None
+    has_b_up = b_up is not None
     _fwd_kernel[grid](
         x,
         WT_up,
         b_up,
+        has_b_up,
         WT_gp,
         b_gp,
+        has_b_gp,
         out,
         act_fn,
         dropout_p,
