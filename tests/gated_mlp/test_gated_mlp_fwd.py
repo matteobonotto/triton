@@ -4,7 +4,6 @@ from triton_kernels.nn.gated_mlp.gated_mlp import (
     eager_forward,
     mlp_hidden_states_fwd,
 )
-from triton_kernels.nn.gated_mlp.ops.fwd_persistent_tma import mlp_hidden_states_fwd
 from triton_kernels.utils import get_device
 
 import triton

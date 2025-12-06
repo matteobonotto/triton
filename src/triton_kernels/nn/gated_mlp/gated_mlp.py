@@ -1,8 +1,9 @@
 from typing import Dict, Optional
 from torch import nn
+import torch
 from collections import OrderedDict
 
-from .ops.fwd_persistent_tma import mlp_hidden_states_fwd
+from .ops.fwd import mlp_hidden_states_fwd
 
 
 class ClassInstantier(OrderedDict):
@@ -23,7 +24,7 @@ ACT2CLS = {
 }
 ACT2FN = ClassInstantier(ACT2CLS)
 
-ACT_INTERFACE = {
+ACT_FWD = {
     "gelu": nn.GELU(),
     "leaky_relu": nn.LeakyReLU(),
     "relu": nn.ReLU(),
@@ -33,6 +34,25 @@ ACT_INTERFACE = {
     "tanh": nn.Tanh(),
     "no_act": nn.Identity(),
 }
+
+def _silu_op_bwd(x, grad_output):
+    sigma = 1 / (1 + torch.exp(-x))
+    act_prime = sigma * (1 + x * (1 - sigma))
+    return grad_output * act_prime
+
+ACT_BWD = {
+    # "gelu": nn.GELU(),
+    # "leaky_relu": nn.LeakyReLU(),
+    # "relu": nn.ReLU(),
+    # "sigmoid": nn.Sigmoid(),
+    "silu": _silu_op_bwd,
+    # "swish": nn.SiLU(),
+    # "tanh": nn.Tanh(),
+    # "no_act": nn.Identity(),
+}
+
+
+
 
 # def mlp_fwd(x, W1, W2, W3):
 #     return (torch.nn.functional.silu(x @ W2.T) * (x @ W1.T)) @ W3.T
@@ -64,7 +84,7 @@ class NaiveGatedMLP(nn.Module):
         self.gate_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=bias)
         self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=bias)
         self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=bias)
-        self.act = ACT_INTERFACE[hidden_act]
+        self.act = ACT_FWD[hidden_act]
         self.act_fn = hidden_act
         self.dropout = nn.Dropout(dropout_p)
 
@@ -84,10 +104,12 @@ def eager_forward(
     b_up: Optional[Tensor],
     WT_gp: Tensor,
     b_gp: Optional[Tensor],
-    act_fn: str,
-    dropout_p: float,
+    # act_fn: str,
+    # dropout_p: float,
 ) -> Tensor:
 
+    act_fn = 'silu'
+    
     up = x @ WT_up.T
     if b_up is not None:
         up += b_up
@@ -96,7 +118,7 @@ def eager_forward(
     if b_gp is not None:
         gated += b_gp
 
-    gated = ACT_INTERFACE[act_fn]((gated))
+    gated = ACT_FWD[act_fn](gated)
     out = gated * up
     # x = nn.functional.dropout(x, dropout_p, training)
     return out
@@ -112,14 +134,41 @@ class FusedGatedMLPFunction(Function):
         b_up: Tensor,
         W_gp: Tensor,
         b_gp: Tensor,
-        act_fn: str,
-        dropout_p: float,
+        # act_fn: str,
+        # dropout_p: float,
     ) -> Tensor:
-        hidden_states = eager_forward(x, W_up, b_up, W_gp, b_gp, act_fn, dropout_p)
+        hidden_states = eager_forward(x, W_up, b_up, W_gp, b_gp)
+        
+        ctx.save_for_backward(x, W_up, W_gp)
+        
         return hidden_states
 
     @staticmethod
-    def backward(ctx, grad_output): ...
+    def backward(ctx, grad_output): 
+        act_fn = 'silu'
+        x, W_up, W_gp = ctx.saved_tensors
+        
+        ### compute necessary quantities
+        a = x @ W_up.T
+        b = x @ W_gp.T
+        c = ACT_FWD[act_fn](b)  
+        # act_prime = ACT_BWD[act_fn](b, grad_output)
+
+        ### dx
+        sigma = torch.sigmoid(b)
+        act_prime = sigma * (1 + b * (1 - sigma))
+        
+        dx_1 = (grad_output * c) @ W_up
+        dx_2 = ((grad_output * a) * act_prime) @ W_gp
+        dx = dx_1 + dx_2
+        
+        ### dW_up
+        dW_up = (grad_output * c).T @ x
+        
+        ### dW_gp
+        dW_gp = ((grad_output * a) * act_prime).T @ x
+        
+        return dx, dW_up, None, dW_gp, None
 
 
 class FusedGatedMLP(nn.Module):
@@ -137,7 +186,7 @@ class FusedGatedMLP(nn.Module):
         self.gate_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=bias)
         self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=bias)
         self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=bias)
-        self.act = ACT_INTERFACE[hidden_act]
+        self.act = ACT_FWD[hidden_act]
         self.act_fn = hidden_act
         self.dropout = nn.Dropout(dropout_p)
 
@@ -149,8 +198,8 @@ class FusedGatedMLP(nn.Module):
             self.up_proj.bias,
             self.gate_proj.weight,
             self.gate_proj.bias,
-            self.act_fn,
-            self.dropout.p,
+            # self.act_fn,
+            # self.dropout.p,
         )
         down_proj = self.down_proj(hidden_states)
         return down_proj
