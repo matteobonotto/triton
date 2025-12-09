@@ -6,7 +6,7 @@ from torch import Tensor
 import math
 
 from .act import _act_fwd, _act_bwd
-from .utils import map_pid_m_n
+from .utils import map_pid_m_n, get_num_streaming_multiprocessors
 
 
 @triton.jit()
@@ -134,14 +134,6 @@ def pad_tensor_16_byte_aligned(t: Tensor, axis: int) -> Tensor:
     new_t = torch.zeros(new_dims, dtype=t.dtype, device=t.device)
     new_t[: old_dims[0], : old_dims[1]] = t
     return new_t
-
-
-def get_num_streaming_multiprocessors() -> int:
-    return (
-        10  # dummy value for dev/debugging
-        if not torch.cuda.is_available()
-        else torch.cuda.get_device_properties("cuda:0").multi_processor_count
-    )
 
 
 def mlp_hidden_states_fwd(

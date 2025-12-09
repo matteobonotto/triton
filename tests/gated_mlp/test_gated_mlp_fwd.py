@@ -44,7 +44,9 @@ def test_fwd_op_triton():
     DTYPE = torch.float32
 
     init_args = {
-        "hidden_act": "no_act", "dropout_p": 0.0, "bias": False,
+        "hidden_act": "no_act",
+        "dropout_p": 0.0,
+        "bias": False,
     }
 
     gmlp = NaiveGatedMLP(**init_args).to(DEVICE).to(DTYPE)

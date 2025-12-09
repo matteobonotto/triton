@@ -4,6 +4,7 @@ import torch
 from collections import OrderedDict
 
 from .ops.fwd import mlp_hidden_states_fwd
+from .ops.bwd import mlp_hidden_states_bwd
 
 
 class ClassInstantier(OrderedDict):
@@ -35,10 +36,12 @@ ACT_FWD = {
     "no_act": nn.Identity(),
 }
 
+
 def _silu_op_bwd(x, grad_output):
     sigma = 1 / (1 + torch.exp(-x))
     act_prime = sigma * (1 + x * (1 - sigma))
     return grad_output * act_prime
+
 
 ACT_BWD = {
     # "gelu": nn.GELU(),
@@ -50,8 +53,6 @@ ACT_BWD = {
     # "tanh": nn.Tanh(),
     # "no_act": nn.Identity(),
 }
-
-
 
 
 # def mlp_fwd(x, W1, W2, W3):
@@ -89,16 +90,19 @@ class NaiveGatedMLP(nn.Module):
         self.dropout = nn.Dropout(dropout_p)
 
     def forward(self, x):
+        shapes = x.shape
+        if len(shapes) > 2:
+            x = x.view(-1, shapes[-1])
         hidden_states = self.dropout(self.act(self.gate_proj(x)) * self.up_proj(x))
         down_proj = self.down_proj(hidden_states)
-        return down_proj
+        return down_proj.view(shapes) if len(shapes) > 2 else down_proj
 
 
 from torch import Tensor
 from torch.autograd.function import Function
 
 
-def eager_forward(
+def eager_fwd(
     x: Tensor,
     WT_up: Tensor,
     b_up: Optional[Tensor],
@@ -108,8 +112,8 @@ def eager_forward(
     # dropout_p: float,
 ) -> Tensor:
 
-    act_fn = 'silu'
-    
+    act_fn = "silu"
+
     up = x @ WT_up.T
     if b_up is not None:
         up += b_up
@@ -122,7 +126,32 @@ def eager_forward(
     out = gated * up
     # x = nn.functional.dropout(x, dropout_p, training)
     return out
-    
+
+
+def eager_bwd(x, W_up, W_gp, grad_output):
+    act_fn = "silu"
+
+    ### compute necessary quantities
+    a = x @ W_up.T
+    b = x @ W_gp.T
+    c = ACT_FWD[act_fn](b)
+    # act_prime = ACT_BWD[act_fn](b, grad_output)
+
+    ### dx
+    sigma = torch.sigmoid(b)
+    act_prime = sigma * (1 + b * (1 - sigma))
+
+    dx_1 = (grad_output * c) @ W_up
+    dx_2 = ((grad_output * a) * act_prime) @ W_gp
+    dx = dx_1 + dx_2
+
+    ### dW_up
+    dW_up = (grad_output * c).T @ x
+
+    ### dW_gp
+    dW_gp = ((grad_output * a) * act_prime).T @ x
+
+    return x, dW_up, dW_gp
 
 
 class FusedGatedMLPFunction(Function):
@@ -137,37 +166,27 @@ class FusedGatedMLPFunction(Function):
         # act_fn: str,
         # dropout_p: float,
     ) -> Tensor:
-        hidden_states = eager_forward(x, W_up, b_up, W_gp, b_gp)
-        
+        # hidden_states = eager_fwd(x, W_up, b_up, W_gp, b_gp)
+        hidden_states = mlp_hidden_states_fwd(
+            x=x,
+            WT_up=W_up,
+            b_up=None,
+            WT_gp=W_gp,
+            b_gp=None,
+            act_fn="silu",
+            dropout_p=0.0,
+        )
+
         ctx.save_for_backward(x, W_up, W_gp)
-        
+
         return hidden_states
 
     @staticmethod
-    def backward(ctx, grad_output): 
-        act_fn = 'silu'
+    def backward(ctx, grad_output):
         x, W_up, W_gp = ctx.saved_tensors
-        
-        ### compute necessary quantities
-        a = x @ W_up.T
-        b = x @ W_gp.T
-        c = ACT_FWD[act_fn](b)  
-        # act_prime = ACT_BWD[act_fn](b, grad_output)
 
-        ### dx
-        sigma = torch.sigmoid(b)
-        act_prime = sigma * (1 + b * (1 - sigma))
-        
-        dx_1 = (grad_output * c) @ W_up
-        dx_2 = ((grad_output * a) * act_prime) @ W_gp
-        dx = dx_1 + dx_2
-        
-        ### dW_up
-        dW_up = (grad_output * c).T @ x
-        
-        ### dW_gp
-        dW_gp = ((grad_output * a) * act_prime).T @ x
-        
+        dx, dW_up, dW_gp = eager_bwd(x, W_up, W_gp, grad_output)
+
         return dx, dW_up, None, dW_gp, None
 
 
@@ -190,8 +209,11 @@ class FusedGatedMLP(nn.Module):
         self.act_fn = hidden_act
         self.dropout = nn.Dropout(dropout_p)
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         # hidden_states = self.dropout(self.act(self.gate_proj(x)) * self.up_proj(x))
+        shapes = x.shape
+        if len(shapes) > 2:
+            x = x.view(-1, shapes[-1])
         hidden_states = FusedGatedMLPFunction.apply(
             x,
             self.up_proj.weight,
@@ -202,4 +224,4 @@ class FusedGatedMLP(nn.Module):
             # self.dropout.p,
         )
         down_proj = self.down_proj(hidden_states)
-        return down_proj
+        return down_proj.view(shapes) if len(shapes) > 2 else down_proj

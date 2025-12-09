@@ -1,5 +1,14 @@
 import triton
 import triton.language as tl
+import torch
+
+
+def get_num_streaming_multiprocessors() -> int:
+    return (
+        10  # dummy value for dev/debugging
+        if not torch.cuda.is_available()
+        else torch.cuda.get_device_properties("cuda:0").multi_processor_count
+    )
 
 
 @triton.jit()

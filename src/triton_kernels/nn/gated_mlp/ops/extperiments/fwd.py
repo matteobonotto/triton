@@ -108,7 +108,9 @@ def _fwd_kernel(
 
     ### store back on memory
     mask_out = (offset_m < M)[:, None] & (offset_n < N)[None, :]
-    tile_out_ptr = out_ptr + offset_m[:, None] * out_stride_m + offset_n[None, :] * out_stride_n
+    tile_out_ptr = (
+        out_ptr + offset_m[:, None] * out_stride_m + offset_n[None, :] * out_stride_n
+    )
     tl.store(tile_out_ptr, tile_out, mask=mask_out)
 
 
@@ -172,7 +174,7 @@ def mlp_hidden_states_fwd(
 
     M, K = x.shape
     N, _ = WT_up.shape
-    
+
     stride_W_up = (WT_up.stride(1), WT_up.stride(0))
     stride_W_gp = (WT_gp.stride(1), WT_gp.stride(0))
 
@@ -191,7 +193,7 @@ def mlp_hidden_states_fwd(
     ### Create the grid
     BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M = (8, 8, 8, 8)
     BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M = (64, 64, 64, 8)
-    grid = math.ceil(N / BLOCK_SIZE_M) * math.ceil(N / BLOCK_SIZE_N), 
+    grid = (math.ceil(N / BLOCK_SIZE_M) * math.ceil(N / BLOCK_SIZE_N),)
 
     ### allocate output and run the kernel
     out = torch.zeros((M, N), dtype=x.dtype, device=x.device)
