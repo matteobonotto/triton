@@ -13,11 +13,11 @@ def _act_fwd(x, act_name: tl.constexpr):
 
 
 @triton.jit()
-def _act_bwd(x, grad_output, act_name: tl.constexpr):
+def _act_bwd(x, act_name: tl.constexpr):
     if act_name == "no_act":
-        return grad_output
+        return x
     elif act_name == "silu":
-        return _silu_bwd(x, grad_output)
+        return _silu_bwd(x)
     else:
         raise NotImplementedError()
 
@@ -39,7 +39,7 @@ def _silu_fwd(x):
 
 
 @triton.jit()
-def _silu_bwd(x, grad_output):
+def _silu_bwd(x):
     sigma = _compute_sigma(x)
     act_prime = sigma * (1 + x * (1 - sigma))
-    return grad_output * act_prime
+    return act_prime

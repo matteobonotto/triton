@@ -13,7 +13,7 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "env": {
-                "CUDA_VISIBLE_DEVICES": "0"  // Qui imposti la GPU da usare
+                "CUDA_VISIBLE_DEVICES": "0", "TRITON_IS_DEBUGGING": "1"
             }
         }
     ]

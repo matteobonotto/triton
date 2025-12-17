@@ -174,7 +174,7 @@ def mlp_hidden_states_fwd(
 
     ### Create the grid
     NUM_SMS = get_num_streaming_multiprocessors()
-    BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M = (64, 64, 64, 8)
+    BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M = (64, 64, 32, 2)
     grid = (min(NUM_SMS, math.ceil(N / BLOCK_SIZE_M) * math.ceil(N / BLOCK_SIZE_N)),)
 
     ### custom allocation function

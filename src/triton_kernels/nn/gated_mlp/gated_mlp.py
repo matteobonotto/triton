@@ -187,6 +187,13 @@ class FusedGatedMLPFunction(Function):
     def backward(ctx, grad_output):
         x, W_up, W_gp = ctx.saved_tensors
 
+        # import pydevd
+        # pydevd.settrace(suspend=False, trace_only_current_thread=True)
+        # print(f"{x.shape=}")
+        # print(f"{W_up.shape=}")
+        # print(f"{W_gp.shape=}")
+        # print(f"{grad_output.shape=}")
+
         dx, dW_up, dW_gp = eager_bwd(x, W_up, W_gp, grad_output)
 
         return dx, dW_up, None, dW_gp, None

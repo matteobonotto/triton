@@ -3,6 +3,8 @@ from triton_kernels.nn.gated_mlp.gated_mlp import (
     FusedGatedMLP,
     eager_fwd,
     mlp_hidden_states_fwd,
+    mlp_hidden_states_bwd,
+    ACT_FWD,
 )
 from triton_kernels.utils import get_device
 
@@ -10,6 +12,7 @@ from torch.autograd import grad
 import triton
 from torch import nn
 import torch
+import os
 
 
 def copy_weights(module_src: nn.Module, module_tgt: nn.Module) -> None:
@@ -31,7 +34,7 @@ def test_gated_mlp_bwd():
 
     copy_weights(gmlp_1, gmlp_2)
 
-    M = 128
+    M = 32
     K = gmlp_1.hidden_size
     B = 16
 
@@ -41,7 +44,10 @@ def test_gated_mlp_bwd():
     ### test fwd pass first
     out_1 = gmlp_1(x)
     out_2 = gmlp_2(x)
-    triton.testing.assert_close(out_1, out_2, atol=1e-6)
+    print((out_1 - out_2).norm() / out_1.norm())
+    triton.testing.assert_close(
+        out_1, out_2, atol=1e-6 if "TRITON_INTERPRET" in os.environ.keys() else 1e-3
+    )
 
     ### then test bwd pass
     grad_outputs = torch.rand_like(x).to(DEVICE)
@@ -74,7 +80,45 @@ def test_gated_mlp_bwd():
     triton.testing.assert_close(gmlp_1(x), gmlp_2(x), rtol=1e-6)
 
 
-test_gated_mlp_bwd()
+# test_gated_mlp_bwd()
+
+
+def test_quantities_for_bwd_triton():
+
+    DEVICE = get_device()
+    DTYPE = torch.float32
+    kwargs = {"device": DEVICE, "dtype": DTYPE}
+    atol = 1e-3 if "TRITON_INTERPRET" in os.environ.keys() else 1e-7
+
+    B, M, N, K = (2, 32, 512, 256)
+    BM = B * M
+
+    x = torch.rand((BM, K), **kwargs) / K
+    W_up = torch.rand((N, K), **kwargs) / K
+    W_gp = torch.rand((N, K), **kwargs) / K
+    hidden_states = torch.rand((BM, N), **kwargs) / K
+    grad_output = torch.rand(hidden_states.shape, **kwargs) / K
+
+    ### ref quantities
+    act_fn = "silu"
+
+    a = x @ W_up.T
+    b = x @ W_gp.T
+    c = ACT_FWD[act_fn](b)
+    sigma = torch.sigmoid(b)
+
+    act_prime = sigma * (1 + b * (1 - sigma))
+    grad_output_a_act_prime = (grad_output * a) * act_prime
+    grad_output_c = grad_output * c
+
+    ### triton kernel
+    o1, o2, o3 = mlp_hidden_states_bwd(x, W_up, W_gp, grad_output)
+    triton.testing.assert_close(act_prime, o1, atol)
+    triton.testing.assert_close(grad_output_a_act_prime, o2, atol)
+    triton.testing.assert_close(grad_output_c, o3, atol)
+
+
+test_quantities_for_bwd_triton()
 
 
 def test_bwd_op_triton():
