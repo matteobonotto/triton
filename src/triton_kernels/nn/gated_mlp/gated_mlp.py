@@ -131,27 +131,29 @@ def eager_fwd(
 def eager_bwd(x, W_up, W_gp, grad_output):
     act_fn = "silu"
 
-    ### compute necessary quantities
+    ### compute fwd pass quantities
     a = x @ W_up.T
     b = x @ W_gp.T
     c = ACT_FWD[act_fn](b)
-    # act_prime = ACT_BWD[act_fn](b, grad_output)
+    sigma = torch.sigmoid(b)
+
+    ### some quantities for bwd computation
+    act_prime = sigma * (1 + b * (1 - sigma))
+    grad_output_a_act_prime = (grad_output * a) * act_prime
+    grad_output_c = grad_output * c
 
     ### dx
-    sigma = torch.sigmoid(b)
-    act_prime = sigma * (1 + b * (1 - sigma))
-
-    dx_1 = (grad_output * c) @ W_up
-    dx_2 = ((grad_output * a) * act_prime) @ W_gp
+    dx_1 = grad_output_c @ W_up
+    dx_2 = grad_output_a_act_prime @ W_gp
     dx = dx_1 + dx_2
 
     ### dW_up
-    dW_up = (grad_output * c).T @ x
+    dW_up = grad_output_c.T @ x
 
     ### dW_gp
-    dW_gp = ((grad_output * a) * act_prime).T @ x
+    dW_gp = grad_output_a_act_prime.T @ x
 
-    return x, dW_up, dW_gp
+    return dx, dW_up, dW_gp
 
 
 class FusedGatedMLPFunction(Function):
