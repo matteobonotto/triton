@@ -161,12 +161,23 @@ def _compute_dx(
         strides=[N, 1],
         block_shape=[BLOCK_SIZE_M, BLOCK_SIZE_N],
     )
-    W_up_desc = ...
-    grad_output_a_act_prime_desc = ...
-    W_gp_desc = ...
+    W_up_desc = tl.make_tensor_descriptor(
+        W_up_ptr, shape=[N, K], strides=[K, 1], block_shape=[BLOCK_SIZE_N, BLOCK_SIZE_K]
+    )
+    grad_output_a_act_prime_desc = tl.make_tensor_descriptor(
+        grad_output_a_act_prime_ptr,
+        shape=[M, N],
+        strides=[N, 1],
+        block_shape=[BLOCK_SIZE_M, BLOCK_SIZE_N],
+    )
+    W_gp_desc = tl.make_tensor_descriptor(
+        W_gp_ptr, shape=[N, K], strides=[K, 1], block_shape=[BLOCK_SIZE_N, BLOCK_SIZE_K]
+    )
 
     ### tensor descriptor of output
-    dx_desc = ...
+    dx_desc = tl.make_tensor_descriptor(
+        dx_ptr, shape=[M, K], strides=[K, 1], block_shape=[BLOCK_SIZE_M, BLOCK_SIZE_K]
+    )
 
     for tile_id in tl.range(...):
         ...
