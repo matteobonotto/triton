@@ -151,8 +151,19 @@ def _compute_dx(
     BLOCK_SIZE_N: tl.constexpr,
     GROUP_SIZE_M: tl.constexpr,
 ):
+    """
+    Triton kernel computing:
 
+        dx_1 = grad_output_c @ W_up
+        dx_2 = grad_output_a_act_prime @ W_gp
+        dx = dx_1 + dx_2
+
+    """
     pid = tl.program_id(axis=0)
+    num_programs_m = tl.cdiv(M, BLOCK_SIZE_M)
+    # num_programs_n = tl.cdiv(N, BLOCK_SIZE_N)
+    num_programs_k = tl.cdiv(K, BLOCK_SIZE_K)
+    num_programs = num_programs_m * num_programs_k
 
     ### tensor descriptors of inputs
     grad_output_c_desc = tl.make_tensor_descriptor(
@@ -179,12 +190,114 @@ def _compute_dx(
         dx_ptr, shape=[M, K], strides=[K, 1], block_shape=[BLOCK_SIZE_M, BLOCK_SIZE_K]
     )
 
-    for tile_id in tl.range(...):
-        ...
+    for tile_id in tl.range(pid, num_programs, NUM_SMS):
+        pid_m, pid_k = map_pid_m_n(
+            tile_id, M, K, BLOCK_SIZE_M, BLOCK_SIZE_K, GROUP_SIZE_M, True
+        )
 
-        for offset_k in tl.range(0, K, BLOCK_SIZE_K):
+        offset_m = pid_m * BLOCK_SIZE_M
+        offset_k = pid_k * BLOCK_SIZE_K
 
-            ...
+        tile_dx_1 = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_K), dtype=tl.float32)
+        tile_dx_2 = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_K), dtype=tl.float32)
+
+        for offset_n in tl.range(0, N, BLOCK_SIZE_N):
+
+            tile_grad_output_c = grad_output_c_desc.load([offset_m, offset_n])
+            tile_W_up = W_up_desc.load([offset_n, offset_k])
+            tile_dx_1 = tl.dot(tile_grad_output_c, tile_W_up, acc=tile_dx_1)
+
+            tile_grad_output_a_act_prime = grad_output_a_act_prime_desc.load(
+                [offset_m, offset_n]
+            )
+            tile_W_gp = W_gp_desc.load([offset_n, offset_k])
+            tile_dx_2 = tl.dot(tile_grad_output_a_act_prime, tile_W_gp, acc=tile_dx_2)
+
+        tile_dx = tile_dx_1 + tile_dx_2
+
+        ### store back in memory
+        dx_desc.store([offset_m, offset_k], tile_dx)
+
+
+@triton.jit()
+def _compute_dW_up_dW_gp(
+    x_ptr,
+    grad_output_c_ptr,
+    grad_output_a_act_prime_ptr,
+    dW_up_ptr,
+    dW_gp_ptr,
+    M,
+    N,
+    K,
+    NUM_SMS: tl.constexpr,
+    BLOCK_SIZE_M: tl.constexpr,
+    BLOCK_SIZE_K: tl.constexpr,
+    BLOCK_SIZE_N: tl.constexpr,
+    GROUP_SIZE_M: tl.constexpr,
+):
+    pid = tl.program_id(axis=0)
+    num_programs_n = tl.cdiv(N, BLOCK_SIZE_N)
+    num_programs_k = tl.cdiv(K, BLOCK_SIZE_K)
+    num_programs = num_programs_n * num_programs_k
+
+    ### make tensor descriptors inputs
+    x_desc = tl.make_tensor_descriptor(
+        x_ptr, shape=[M, K], strides=[K, 1], block_shape=[BLOCK_SIZE_M, BLOCK_SIZE_K]
+    )
+    grad_output_c_desc = tl.make_tensor_descriptor(
+        grad_output_c_ptr,
+        shape=[M, N],
+        strides=[N, 1],
+        block_shape=[BLOCK_SIZE_M, BLOCK_SIZE_N],
+    )
+    grad_output_a_act_prime_desc = tl.make_tensor_descriptor(
+        grad_output_a_act_prime_ptr,
+        shape=[M, N],
+        strides=[N, 1],
+        block_shape=[BLOCK_SIZE_M, BLOCK_SIZE_N],
+    )
+
+    ### make tensor descriptors outputs
+    dW_up_desc = tl.make_tensor_descriptor(
+        dW_up_ptr,
+        shape=[N, K],
+        strides=[K, 1],
+        block_shape=[BLOCK_SIZE_N, BLOCK_SIZE_K],
+    )
+    dW_gp_desc = tl.make_tensor_descriptor(
+        dW_gp_ptr,
+        shape=[N, K],
+        strides=[K, 1],
+        block_shape=[BLOCK_SIZE_N, BLOCK_SIZE_K],
+    )
+
+    ### persistent loop
+    for tile_id in tl.range(pid, num_programs, NUM_SMS):
+        pid_n, pid_k = map_pid_m_n(
+            tile_id, N, K, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M, True
+        )
+
+        offset_n = pid_n * BLOCK_SIZE_N
+        offset_k = pid_k * BLOCK_SIZE_K
+
+        # print(f"{offset_n=}, {offset_k=}")
+
+        tile_dW_up = tl.zeros((BLOCK_SIZE_N, BLOCK_SIZE_K), tl.float32)
+        tile_dW_gp = tl.zeros((BLOCK_SIZE_N, BLOCK_SIZE_K), tl.float32)
+
+        for offset_m in tl.range(0, BLOCK_SIZE_M, M):
+
+            tile_grad_output_c = grad_output_c_desc.load([offset_m, offset_n])
+            tile_grad_output_a_act_prime = grad_output_a_act_prime_desc.load(
+                [offset_m, offset_n]
+            )
+            tile_x = x_desc.load([offset_m, offset_k])
+
+            tile_dW_up = tl.dot(tile_grad_output_c.T, tile_x, acc=tile_dW_up)
+            tile_dW_gp = tl.dot(tile_grad_output_a_act_prime.T, tile_x, acc=tile_dW_gp)
+
+        dW_up_desc.store(offsets=[offset_n, offset_k], value=tile_dW_up)
+        dW_gp_desc.store(offsets=[offset_n, offset_k], value=tile_dW_gp)
 
 
 def mlp_hidden_states_bwd(
@@ -269,6 +382,7 @@ def mlp_hidden_states_bwd(
     dW_up = torch.zeros(W_up.shape, **kwargs)  # check dtype
     dW_gp = torch.zeros(W_gp.shape, **kwargs)  # check dtype
 
+    grid = (min(NUM_SMS, math.ceil(M / BLOCK_SIZE_M) * math.ceil(K / BLOCK_SIZE_K)),)
     _compute_dx[grid](
         grad_output_c,
         W_up,
@@ -284,7 +398,22 @@ def mlp_hidden_states_bwd(
         BLOCK_SIZE_N,
         GROUP_SIZE_M,
     )
-    # # _compute_dW[grid](...)
-    # # _compute_dW[grid](...)
+
+    grid = (min(NUM_SMS, math.ceil(K / BLOCK_SIZE_K) * math.ceil(N / BLOCK_SIZE_N)),)
+    _compute_dW_up_dW_gp[grid](
+        x,
+        grad_output_c,
+        grad_output_a_act_prime,
+        dW_up,
+        dW_gp,
+        M,
+        N,
+        K,
+        NUM_SMS,
+        BLOCK_SIZE_M,
+        BLOCK_SIZE_K,
+        BLOCK_SIZE_N,
+        GROUP_SIZE_M,
+    )
 
     return dx, dW_up, dW_gp

@@ -10,7 +10,7 @@ from triton_kernels.utils import get_device
 
 from torch.autograd import grad
 import triton
-from torch import nn
+from torch import nn, Tensor
 import torch
 import os
 
@@ -83,6 +83,12 @@ def test_gated_mlp_bwd():
 # test_gated_mlp_bwd()
 
 
+def assert_close(x: Tensor, x_ref: Tensor, atol: float):
+    norm_diff = ((x - x_ref).norm() / x_ref.norm()).item()
+    assert norm_diff < atol, f"Got 'norm_diff' >= 'atol, where {norm_diff=}, {atol=}"
+    print(f"{norm_diff=:3.3}, {atol=}")
+
+
 def test_quantities_for_bwd_triton():
 
     DEVICE = get_device()
@@ -111,14 +117,19 @@ def test_quantities_for_bwd_triton():
     grad_output_a_act_prime = (grad_output * a) * act_prime
     grad_output_c = grad_output * c
 
+    dx_1 = grad_output_c @ W_up
+    dx_2 = grad_output_a_act_prime @ W_gp
+    dx_ref = dx_1 + dx_2
+
+    dW_up_ref = grad_output_c.T @ x
+
+    dW_gp_ref = grad_output_a_act_prime.T @ x
+
     ### triton kernel
-    o1, o2, o3 = mlp_hidden_states_bwd(x, W_up, W_gp, grad_output)
-    triton.testing.assert_close(act_prime, o1, atol)
-    triton.testing.assert_close(grad_output_a_act_prime, o2, atol)
-    triton.testing.assert_close(grad_output_c, o3, atol)
-
-
-test_quantities_for_bwd_triton()
+    dx, dW_up, dW_gp = mlp_hidden_states_bwd(x, W_up, W_gp, grad_output)
+    assert_close(dx, dx_ref, atol)
+    assert_close(dW_up, dW_up_ref, atol)
+    assert_close(dW_gp, dW_gp_ref, atol)
 
 
 def test_bwd_op_triton():
