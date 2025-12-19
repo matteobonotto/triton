@@ -194,7 +194,8 @@ class FusedGatedMLPFunction(Function):
         # print(f"{W_gp.shape=}")
         # print(f"{grad_output.shape=}")
 
-        dx, dW_up, dW_gp = eager_bwd(x, W_up, W_gp, grad_output)
+        # dx, dW_up, dW_gp = eager_bwd(x, W_up, W_gp, grad_output)
+        dx, dW_up, dW_gp = mlp_hidden_states_bwd(x, W_up, W_gp, grad_output)
 
         return dx, dW_up, None, dW_gp, None
 

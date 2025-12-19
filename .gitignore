@@ -4,3 +4,5 @@ venv/
 
 **/*.pyc
 poetry.lock
+triton_dejavu_cache
+**/smac*_output

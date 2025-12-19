@@ -80,7 +80,7 @@ def test_gated_mlp_bwd():
     triton.testing.assert_close(gmlp_1(x), gmlp_2(x), rtol=1e-6)
 
 
-# test_gated_mlp_bwd()
+test_gated_mlp_bwd()
 
 
 def assert_close(x: Tensor, x_ref: Tensor, atol: float):
@@ -89,7 +89,7 @@ def assert_close(x: Tensor, x_ref: Tensor, atol: float):
     print(f"{norm_diff=:3.3}, {atol=}")
 
 
-def test_quantities_for_bwd_triton():
+def test_bwd_ops_triton():
 
     DEVICE = get_device()
     DTYPE = torch.float32
@@ -132,52 +132,3 @@ def test_quantities_for_bwd_triton():
     assert_close(dW_gp, dW_gp_ref, atol)
 
 
-def test_bwd_op_triton():
-
-    DEVICE = get_device()
-    DTYPE = torch.float32
-
-    init_args = {
-        "hidden_act": "no_act",
-        "dropout_p": 0.0,
-        "bias": False,
-    }
-
-    gmlp = NaiveGatedMLP(**init_args).to(DEVICE).to(DTYPE)
-
-    M = 128
-    K = gmlp.hidden_size
-
-    x = torch.rand((M, K), device=DEVICE, dtype=DTYPE)
-    out_ref = eager_forward(
-        x,
-        gmlp.up_proj.weight,
-        gmlp.up_proj.bias,
-        gmlp.gate_proj.weight,
-        gmlp.gate_proj.bias,
-        gmlp.act_fn,
-        gmlp.dropout.p,
-    )
-    print(out_ref)
-
-    out_triton = mlp_hidden_states_fwd(
-        x,
-        gmlp.up_proj.weight,
-        gmlp.up_proj.bias,
-        gmlp.gate_proj.weight,
-        gmlp.gate_proj.bias,
-        gmlp.act_fn,
-        gmlp.dropout.p,
-    )
-    print(out_triton)
-
-    print((out_ref - out_triton).norm() / out_ref.norm())
-
-    triton.testing.assert_close(out_ref, out_triton, rtol=1e-6)
-
-    ...
-
-    # triton.testing.assert_close(gmlp_1(x), gmlp_2(x), rtol=1e-6)
-
-
-test_fwd_op_triton()
