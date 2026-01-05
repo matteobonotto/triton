@@ -8,15 +8,13 @@ import stat
 
 
 def ensure_dejavu_cache_dir(path: Path):
-    p = Path(path)
-
     # 1. Create directory if it does not exist
-    p.mkdir(parents=True, exist_ok=True)
+    path.mkdir(parents=True, exist_ok=True)
 
     # 2. Ensure permissions: o+rw (add read & write for others)
-    st = p.stat()
+    st = path.stat()
     new_mode = st.st_mode | stat.S_IROTH | stat.S_IWOTH
-    os.chmod(p, new_mode)
+    os.chmod(path, new_mode)
 
 
 dir = Path("triton_dejavu_cache")

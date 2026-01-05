@@ -69,7 +69,7 @@ def get_autotune_config_space():
     # configs=get_autotune_configs(), 
     config_space=get_autotune_config_space(),
     key=["M", "N", "K"],
-    use_bo=True,
+    use_bo=False,
 )
 @triton.jit(launch_metadata=launch_metadata)
 def _compute_quantities_for_bwd(
@@ -213,7 +213,7 @@ def get_autotune_config_space():
     # configs=get_autotune_configs(), 
     config_space=get_autotune_config_space(),
     key=["M", "N", "K"],
-    use_bo=True,
+    use_bo=False,
 )
 
 @triton_dejavu.autotune(
@@ -333,7 +333,7 @@ def get_autotune_configs(pre_hook=None):
     ]
 
 def get_autotune_config_space():
-    BM = [8, 16, 32]  #
+    BM = [16, 32]  #
     BN = [16, 32, 64, 128]  #
     BK = [32, 64, 128, 256]  #
     GS = [2, 4, 8]
@@ -348,7 +348,7 @@ def get_autotune_config_space():
     # configs=get_autotune_configs(), 
     config_space=get_autotune_config_space(),
     key=["M", "N", "K"],
-    use_bo=True,
+    use_bo=False,
 )
 @triton.jit(launch_metadata=launch_metadata)
 def _compute_dW_up_dW_gp(

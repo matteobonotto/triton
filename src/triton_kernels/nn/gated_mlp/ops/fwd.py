@@ -55,7 +55,7 @@ def get_autotune_config_space():
     # configs=get_autotune_configs(), 
     config_space=get_autotune_config_space(),
     key=["M", "N", "K"],
-    use_bo=True,
+    use_bo=False,
 )
 @triton.jit(launch_metadata=launch_metadata)
 def _fwd_kernel(
