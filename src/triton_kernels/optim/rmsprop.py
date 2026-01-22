@@ -7,6 +7,7 @@ from typing import Union, Optional
 # from .ops.rmsprop import rmsprop
 from torch.optim.rmsprop import rmsprop
 
+@torch.no_grad()
 def rmsprop(
         params: list[Tensor],
         grads: list[Tensor],
@@ -22,11 +23,11 @@ def rmsprop(
         grad = grads[i]
         square_avg = square_avgs[i]
 
+        step += 1
         # don't need to output, just update the various params inside the for loop
 
         square_avg = alpha * square_avg + (1 - alpha) * grad.pow(2) # <- optimizer params, shape (N, ) 
-        with torch.no_grad():
-            param -= lr * grad / (torch.sqrt(square_avg) + eps)
+        param -= lr * grad / (torch.sqrt(square_avg) + eps)
     return 
 
 class RMSprop(RMSpropTorch):  # noqa: D101
