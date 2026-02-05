@@ -13,30 +13,6 @@ def get_tween_models(shape):
     model_2.load_state_dict(copy.deepcopy(model_1.state_dict()))
     return model_1, model_2
 
-def test_rmsprop():
-    
-    torch.manual_seed(42)
-    shape = (3, 3)    
-    model_1, model_2 = get_tween_models(shape)
-
-    x = torch.rand(shape[0], )
-    optim = RMSprop(params=model_1.parameters(), foreach=False)
-    optim_fused = FusedRMSprop(params=model_2.parameters())
-
-    print(list(model_1.parameters()))
-    y = model_1(x)
-    loss = y.sum()
-    loss.backward()
-    optim.step()
-    print(list(model_1.parameters()))
-
-    print(list(model_2.parameters()))
-    y = model_2(x)
-    loss = y.sum()
-    loss.backward()
-    optim_fused.step()
-    print(list(model_2.parameters()))
-    ...
 
 
 def test_adam():
