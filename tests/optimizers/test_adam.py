@@ -1,4 +1,3 @@
-
 import copy
 from torch.optim import Adam as Adam, RMSprop
 from torch import nn
@@ -7,6 +6,7 @@ import torch
 from triton_kernels.optim.rmsprop import RMSprop as FusedRMSprop
 from triton_kernels.optim.adam import Adam as FusedAdam
 
+
 def get_tween_models(shape):
     model_1 = nn.Linear(*shape)
     model_2 = nn.Linear(*shape)
@@ -14,14 +14,15 @@ def get_tween_models(shape):
     return model_1, model_2
 
 
-
 def test_adam():
-    
+
     torch.manual_seed(42)
-    shape = (3, 3)    
+    shape = (3, 3)
     model_1, model_2 = get_tween_models(shape)
 
-    x = torch.rand(shape[0], )
+    x = torch.rand(
+        shape[0],
+    )
     optim = Adam(params=model_1.parameters(), foreach=False)
     optim_fused = FusedAdam(params=model_2.parameters())
 

@@ -130,5 +130,3 @@ def test_bwd_ops_triton():
     assert_close(dx, dx_ref, atol)
     assert_close(dW_up, dW_up_ref, atol)
     assert_close(dW_gp, dW_gp_ref, atol)
-
-

@@ -5,18 +5,18 @@ import torch
 from typing import Union, Optional
 
 # from .ops.rmsprop import rmsprop
-from torch.optim.rmsprop import rmsprop
+
 
 @torch.no_grad()
 def rmsprop(
-        params: list[Tensor],
-        grads: list[Tensor],
-        square_avgs: list[Tensor],
-        state_steps: list[Tensor], 
-        lr: float, 
-        eps: float, 
-        alpha: float, 
-    ):
+    params: list[Tensor],
+    grads: list[Tensor],
+    square_avgs: list[Tensor],
+    state_steps: list[Tensor],
+    lr: float = 1e-2,
+    alpha: float = 0.99,
+    eps: float = 1e-8,
+):
 
     for i, param in enumerate(params):
         step = state_steps[i]
@@ -26,14 +26,15 @@ def rmsprop(
         step += 1
         # don't need to output, just update the various params inside the for loop
 
-        square_avg = alpha * square_avg + (1 - alpha) * grad.pow(2) # <- optimizer params, shape (N, ) 
+        square_avg *= alpha
+        square_avg += (1 - alpha) * grad.pow(2)  # <- optimizer params, shape (N, )
         param -= lr * grad / (torch.sqrt(square_avg) + eps)
-    return 
+    return
+
 
 class RMSprop(RMSpropTorch):  # noqa: D101
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
 
     def step(self, **kwargs) -> Optional[Tensor]:
         """Perform a single optimization step.
@@ -52,7 +53,7 @@ class RMSprop(RMSpropTorch):  # noqa: D101
             momentum_buffer_list: list[Tensor] = []
             state_steps: list[Tensor] = []
 
-            has_complex = self._init_group(
+            _ = self._init_group(
                 group,
                 params_with_grad,
                 grads,

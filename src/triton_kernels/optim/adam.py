@@ -1,4 +1,3 @@
-
 from typing import Optional
 import torch
 from torch import Tensor
@@ -87,4 +86,4 @@ class Adam(AdamTorch):
                 decoupled_weight_decay=group["decoupled_weight_decay"],
             )
 
-        return 
+        return

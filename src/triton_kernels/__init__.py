@@ -2,6 +2,7 @@ import os
 from .utils import is_cuda_available
 from pathlib import Path
 from .const import ROOT_PATH
+
 ### triton-dejavu cache data
 
 import stat
@@ -18,7 +19,7 @@ def ensure_dejavu_cache_dir(path: Path):
 
 
 dir = Path("triton_dejavu_cache")
-ensure_dejavu_cache_dir(path = dir)
+ensure_dejavu_cache_dir(path=dir)
 
 os.environ["TRITON_DEJAVU_STORAGE"] = str(ROOT_PATH / dir)
 
