@@ -5,31 +5,31 @@ import torch
 from typing import Union, Optional
 
 # from .ops.rmsprop import rmsprop
+from .ops.rmsprop import rmsprop
 
+# @torch.no_grad()
+# def rmsprop(
+#     params: list[Tensor],
+#     grads: list[Tensor],
+#     square_avgs: list[Tensor],
+#     state_steps: list[Tensor],
+#     lr: float = 1e-2,
+#     alpha: float = 0.99,
+#     eps: float = 1e-8,
+# ):
 
-@torch.no_grad()
-def rmsprop(
-    params: list[Tensor],
-    grads: list[Tensor],
-    square_avgs: list[Tensor],
-    state_steps: list[Tensor],
-    lr: float = 1e-2,
-    alpha: float = 0.99,
-    eps: float = 1e-8,
-):
+#     for i, param in enumerate(params):
+#         step = state_steps[i]
+#         grad = grads[i]
+#         square_avg = square_avgs[i]
 
-    for i, param in enumerate(params):
-        step = state_steps[i]
-        grad = grads[i]
-        square_avg = square_avgs[i]
+#         step += 1
+#         # don't need to output, just update the various params inside the for loop
 
-        step += 1
-        # don't need to output, just update the various params inside the for loop
-
-        square_avg *= alpha
-        square_avg += (1 - alpha) * grad.pow(2)  # <- optimizer params, shape (N, )
-        param -= lr * grad / (torch.sqrt(square_avg) + eps)
-    return
+#         square_avg *= alpha
+#         square_avg += (1 - alpha) * grad.pow(2)  # <- optimizer params, shape (N, )
+#         param -= lr * grad / (torch.sqrt(square_avg) + eps)
+#     return
 
 
 class RMSprop(RMSpropTorch):  # noqa: D101
